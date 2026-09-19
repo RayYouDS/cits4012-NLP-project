@@ -1,6 +1,6 @@
 # Latest Update
 
-- Dataset 实验报告见 [Dataset Inspection Report](reports\2026-09-19_dataset_inspection_report.md)
+- Dataset 实验报告见 [Dataset Inspection Report](reports/2026-09-19_dataset_inspection_report.md)
 
 
 # Assignment 简述
