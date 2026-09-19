@@ -1,0 +1,130 @@
+# ============================================================
+# Python
+# ============================================================
+
+**pycache**/
+*.py[cod]
+*$py.class
+
+# Python virtual environments
+
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+
+# Distribution / packaging
+
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ============================================================
+# Jupyter Notebook
+# ============================================================
+
+.ipynb_checkpoints/
+
+# Jupyter temporary files
+
+*.ipynb_checkpoints
+
+# ============================================================
+# IDE / Editor
+# ============================================================
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================================
+# OS files
+# ============================================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# PyTorch / Deep Learning
+# ============================================================
+
+# Model checkpoints and trained weights
+
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+
+# Checkpoint directories
+
+checkpoints/
+models/
+weights/
+
+# ============================================================
+# Experiment / Training Outputs
+# ============================================================
+
+runs/
+logs/
+wandb/
+mlruns/
+
+# TensorBoard
+
+tensorboard/
+*.tfevents.*
+
+
+# ============================================================
+# Generated Results
+# ============================================================
+
+results/
+outputs/
+predictions/
+
+# Generated figures
+
+figures/generated/
+plots/generated/
+
+# ============================================================
+# Temporary / Local Files
+# ============================================================
+
+*.tmp
+*.temp
+*.bak
+
+# Local experiment configuration
+
+config.local.*
+*.local.yaml
+*.local.yml
+*.local.json
+
+
+# ============================================================
+# Assignment-specific local files
+# ============================================================
+
+# Local notes / scratch files
+
+scratch/
+notes_local/
+experiments/
+
+# Large exported files
+
+*.zip
+*.tar
+*.gz
+*.7z
