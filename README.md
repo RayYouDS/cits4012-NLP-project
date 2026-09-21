@@ -1,7 +1,8 @@
 # Latest Update
 
-- Dataset 实验报告见 [Dataset Inspection Report](reports/2026-09-19_dataset_inspection_report.md)
-
+- Dataset 实验报告 [Dataset Inspection Report](reports/2026-09-19_dataset_inspection_report.md)
+- [Tokenizer APi Reference](docs/tokenizer.md)
+- [Get Data Loader API Reference](docs/get_data_loader.md)
 
 # Assignment 简述
 
