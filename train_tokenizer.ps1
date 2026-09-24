@@ -1,0 +1,1 @@
+python -m scripts.tokenizer.train_piqa_tokenizer

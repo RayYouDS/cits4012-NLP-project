@@ -7,14 +7,14 @@ PIQA 数据集已经封装为 PyTorch DataLoader，完成了数据读取、Sente
 # Usage
 
 ```python
-from piqa_dataloader import get_piqa_dataloaders
+from scripts.data_loader.piqa_dataloader import get_piqa_dataloaders
 from pathlib import Path
 import sentencepiece as spm
 
-BASE_PATH = Path('../datasets/PIQA')
+BASE_PATH = Path('./datasets/PIQA')
 
 tokenizer = spm.SentencePieceProcessor(
-    model_file="./tokenizer/piqa_bpe.model"
+    model_file="./scripts/tokenizer/piqa_bpe.model"
 )
 
 train_loader, validate_loader, test_loader = get_piqa_dataloaders(base_path=BASE_PATH, tokenizer=tokenizer, batch_size=1000)
@@ -102,7 +102,7 @@ Use chocolate frosting to ice the cupcake [EOS]
 Use green frosting to ice the cupcake [EOS]
 ```
 
-模型需要比较两个输入序列，并根据 label 判断两个 solution 中哪个更加合理。
+模型需要比较两个输入序列，并根据 label 判断两个 solution 中哪个更加合理，最后输出一个长度为 [2] 的 logits 序列。
 
 # Recovering Text from Token IDs
 

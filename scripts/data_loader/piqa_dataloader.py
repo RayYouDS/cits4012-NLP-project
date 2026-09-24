@@ -1,4 +1,4 @@
-from load_piqa_data import piqa_to_dataframe
+from scripts.data_loader.load_piqa_data import piqa_to_dataframe
 from pathlib import Path
 import sentencepiece as spm
 import torch
@@ -161,26 +161,3 @@ def get_piqa_dataloaders(base_path:Path, tokenizer, batch_size:int):
 
     return train_loader, validate_loader, test_loader
 
-
-
-if __name__ == "__main__":
-    '''
-    # ============ Load PIQA DataFrames
-    BASE_PATH = Path('./datasets/PIQA')
-    train_dataset, valid_dataset, test_dataset = piqa_to_dataframe(base_path=BASE_PATH)
-
-
-    # ============= Load Tokenizer ============================
-    tokenizer = spm.SentencePieceProcessor(
-        model_file="./scripts/tokenizer/piqa_bpe.model"
-    )
-
-    train_dataset, valid_dataset, test_dataset = tokenize_piqa_dataframe(tokenizer=tokenizer, base_path=BASE_PATH)
-
-    print(train_dataset.columns)
-    '''
-    BASE_PATH = Path('./datasets/PIQA')
-    tokenizer = spm.SentencePieceProcessor(
-            model_file="./scripts/tokenizer/piqa_bpe.model"
-    )
-    train_loader, validate_loader, test_loader = get_piqa_dataloaders(base_path=BASE_PATH, tokenizer=tokenizer, batch_size=1000)

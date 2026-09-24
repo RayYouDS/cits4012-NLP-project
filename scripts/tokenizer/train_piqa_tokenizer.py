@@ -1,16 +1,10 @@
-from pathlib import Path
-import sys
-
-repo_root = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(repo_root))
-
 from scripts.data_loader.load_piqa_data import piqa_to_dataframe
 from pathlib import Path
 import random
 
 
 BASE_PATH = Path('./datasets/PIQA')
-train_dataset, valid_dataset, test_dataset = piqa_to_dataframe(dir=BASE_PATH)
+train_dataset, valid_dataset, test_dataset = piqa_to_dataframe(base_path=BASE_PATH)
 
 # ================= Prepare temporary training corpus for Tokenizer ===========================
 temp_corpus = []
@@ -35,7 +29,7 @@ with temp_corpus_path.open("w", encoding="utf-8") as f:
 # ======================= Train Tokenizer =====================================
 import sentencepiece as spm
 
-model_prefix = output_path / 'piqa_bpe'
+model_prefix = output_path / 'test_bpe'
 
 spm.SentencePieceTrainer.train(input=str(temp_corpus_path),
                                 model_prefix=str(model_prefix),

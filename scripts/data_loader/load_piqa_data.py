@@ -10,6 +10,18 @@ def piqa_to_dataframe(base_path: Path, sample_prop: float=0.1) -> tuple:
     test_data_path = base_path / 'test.jsonl'
     test_label_path = base_path / 'test-labels.lst'
 
+    # Validate File Existence
+    required_files = [
+        train_data_path,
+        train_label_path,
+        test_data_path,
+        test_label_path
+    ]
+
+    for path in required_files:
+        if not path.is_file():
+            raise FileNotFoundError(f"Required file not found: {path}")
+    
     # ========== Load Dataset as DataFrames =========================
     train_dataset = pd.read_json(str(train_data_path), lines=True, encoding="utf-8")
     train_labels = pd.read_csv(str(train_label_path), header=None, names=["label"])
