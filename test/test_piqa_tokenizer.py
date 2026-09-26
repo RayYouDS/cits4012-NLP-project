@@ -3,7 +3,7 @@ import sentencepiece as spm
 
 # ============= Load Tokenizer ============================
 tokenizer = spm.SentencePieceProcessor(
-    model_file="./scripts/tokenizer/piqa_bpe.model"
+    model_file="../scripts/tokenizer/piqa_bpe.model"
 )
 
 text = "An unseen-word, café, or 😊 is still tokenizable."

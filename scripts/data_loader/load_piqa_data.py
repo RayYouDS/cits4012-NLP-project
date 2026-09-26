@@ -1,25 +1,35 @@
 from pathlib import Path
 import pandas as pd
 
-BASE_PATH = Path('./datasets/PIQA')
 
-
-def piqa_to_dataframe(dir: Path, sample_prop: float=0.1) -> tuple:
+def piqa_to_dataframe(base_path: Path, sample_prop: float=0.1) -> tuple:
 
     # ======== Make File Pathes ======================
-    train_data_path = BASE_PATH / 'train.jsonl'
-    train_label_path = BASE_PATH / 'train-labels.lst'
-    test_data_path = BASE_PATH / 'test.jsonl'
-    test_label_path = BASE_PATH / 'test-labels.lst'
+    train_data_path = base_path / 'train.jsonl'
+    train_label_path = base_path / 'train-labels.lst'
+    test_data_path = base_path / 'test.jsonl'
+    test_label_path = base_path / 'test-labels.lst'
 
+    # Validate File Existence
+    required_files = [
+        train_data_path,
+        train_label_path,
+        test_data_path,
+        test_label_path
+    ]
+
+    for path in required_files:
+        if not path.is_file():
+            raise FileNotFoundError(f"Required file not found: {path}")
+    
     # ========== Load Dataset as DataFrames =========================
-    train_dataset = pd.read_json(train_data_path, lines=True, encoding="utf-8")
-    train_labels = pd.read_csv(train_label_path, header=None, names=["label"])
+    train_dataset = pd.read_json(str(train_data_path), lines=True, encoding="utf-8")
+    train_labels = pd.read_csv(str(train_label_path), header=None, names=["label"])
 
     train_dataset = pd.concat([train_dataset.reset_index(drop=True), train_labels], axis=1)
 
-    test_dataset = pd.read_json(test_data_path, lines=True, encoding="utf-8")
-    test_labels = pd.read_csv(test_label_path, header=None, names=["label"])
+    test_dataset = pd.read_json(str(test_data_path), lines=True, encoding="utf-8")
+    test_labels = pd.read_csv(str(test_label_path), header=None, names=["label"])
 
     test_dataset = pd.concat([test_dataset.reset_index(drop=True), test_labels], axis=1)
 
@@ -33,11 +43,13 @@ def piqa_to_dataframe(dir: Path, sample_prop: float=0.1) -> tuple:
     return (train_dataset, valid_dataset, test_dataset)
 
 
+if __name__ == "__main__":
+    BASE_PATH = Path('./datasets/PIQA')
 
-train_dataset, valid_dataset, test_dataset = piqa_to_dataframe(dir=BASE_PATH)
+    train_dataset, valid_dataset, test_dataset = piqa_to_dataframe(BASE_PATH)
 
-print(train_dataset.shape)  # (14502, 4)
-print(test_dataset.shape)   # (1838, 4)
+    print(train_dataset.shape)  # (14502, 4)
+    print(test_dataset.shape)   # (1838, 4)
 
 
 

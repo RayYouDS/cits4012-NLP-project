@@ -1,7 +1,8 @@
 # Latest Update
 
-- Dataset 实验报告见 [Dataset Inspection Report](reports/2026-09-19_dataset_inspection_report.md)
-
+- Dataset 实验报告 [Dataset Inspection Report](reports/2026-09-19_dataset_inspection_report.md)
+- [Tokenizer APi Reference](docs/tokenizer.md)
+- [Get Data Loader API Reference](docs/get_data_loader.md)
 
 # Assignment 简述
 
@@ -37,6 +38,27 @@
 # 协作规范
 
 - 为防止进度阻塞，原则上每个主要功能都应有两人共同参与设计或验证
+- 模块之间统一使用 repo 内的绝对导入；所有上层代码、实验、测试代码从 repo 根目录运行
+  - 例：模块之间使用 repo 内绝对导入 - `train_tokenizer.py`
+
+    ```python
+    from scripts.data_loader.load_piqa_data import piqa_to_dataframe
+    ...
+    ```
+  
+  - 上层代码、实验、测试代码在运行前确保工作目录为 repo 的根目录
+  
+    ```python
+    from pathlib import Path
+    import os
+
+    repo_root = Path.cwd().parents[0]
+    os.chdir(repo_root)
+
+    # print(Path.cwd())  # 检查工作目录
+    ```
+
+
 - 涉及随机过程的代码，应设置随机数种子为 **4012**，以最大化保证可复现性
 - 除了局部的对比实验以外，实验代码以 `.py` 脚本文件为主，而不是直接以 Notebook 作为主要开发环境，便于导入模块和版本控制。尤其是对于模型的 Class 架构类，应以将每一个实验 Class 保存为一个 `.py` 文件
 - 对于具有明显架构差异的实验，可以使用具有描述性的文件名，比如 `bigru_attention.py`, `transformer_attention.py`，方便检查迭代轨迹
