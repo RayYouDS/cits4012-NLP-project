@@ -1,6 +1,6 @@
 # Introduction
 
-PIQA 数据集已经封装为 PyTorch DataLoader，完成了数据读取、SentencePiece Tokenization、特殊 Token 添加以及动态 Padding。
+PIQA 数据集已经封装为 PyTorch DataLoader，完成了数据读取、SentencePiece Tokenization、以及动态 Padding。
 
 模型可以直接使用 DataLoader 输出的数据，无需额外处理原始 PIQA 数据。
 
@@ -29,38 +29,33 @@ train_loader, validate_loader, test_loader = get_piqa_dataloaders(base_path=BASE
 每个对象都支持直接遍历：
 
 ```python
-for input_1, input_2, mask_1, mask_2, labels in train_loader:
-    print(input_1.shape, input_2.shape)
+for goal_ids, goal_mask, sol_ids, sol_mask, labels in train_loader:
+    print(goal_ids.shape, sol_ids.shape)
 ```
 
 输出：
 
 ```
-torch.Size([1000, 477]) torch.Size([1000, 477])
-torch.Size([1000, 233]) torch.Size([1000, 231])
-torch.Size([1000, 260]) torch.Size([1000, 260])
-torch.Size([1000, 253]) torch.Size([1000, 253])
-torch.Size([1000, 214]) torch.Size([1000, 209])
-torch.Size([1000, 232]) torch.Size([1000, 233])
-torch.Size([1000, 289]) torch.Size([1000, 289])
-torch.Size([1000, 331]) torch.Size([1000, 329])
-torch.Size([1000, 237]) torch.Size([1000, 237])
-torch.Size([1000, 254]) torch.Size([1000, 256])
-torch.Size([1000, 200]) torch.Size([1000, 202])
-torch.Size([1000, 202]) torch.Size([1000, 203])
-torch.Size([1000, 320]) torch.Size([1000, 322])
-torch.Size([1000, 333]) torch.Size([1000, 333])
-torch.Size([502, 174]) torch.Size([502, 174])
+torch.Size([1000, 27]) torch.Size([1000, 2, 310])
+torch.Size([1000, 29]) torch.Size([1000, 2, 470])
+torch.Size([1000, 31]) torch.Size([1000, 2, 244])
+torch.Size([1000, 26]) torch.Size([1000, 2, 208])
+torch.Size([1000, 31]) torch.Size([1000, 2, 280])
+torch.Size([1000, 35]) torch.Size([1000, 2, 195])
+torch.Size([1000, 25]) torch.Size([1000, 2, 252])
+torch.Size([1000, 24]) torch.Size([1000, 2, 187])
+torch.Size([1000, 27]) torch.Size([1000, 2, 180])
+torch.Size([1000, 26]) torch.Size([1000, 2, 321])
+torch.Size([1000, 33]) torch.Size([1000, 2, 157])
+torch.Size([1000, 36]) torch.Size([1000, 2, 242])
+torch.Size([1000, 29]) torch.Size([1000, 2, 226])
+torch.Size([1000, 31]) torch.Size([1000, 2, 326])
+torch.Size([502, 24]) torch.Size([502, 2, 205])
 ```
 
-由于 DataLoader 使用 dynamic padding，每个 batch 的序列长度可能不同。
+由于 DataLoader 使用 dynamic padding，每个 batch 的序列长度（Lg, Ls）可能不同。
 
-此外，input_1 和 input_2 的序列长度也可以不同。例如：
-
-- input_1: torch.Size([1000, 233])
-- input_2: torch.Size([1000, 231])
-
-这是正常现象，因为两个 solution 的 Token 数量可能不同。
+sol_ids 的 shape 为 `torch.Size([B, 2, Ls])`，代表两个 Solution 经过 Padding 后的等长 ID
 
 # DataLoader Output
 
@@ -68,66 +63,68 @@ torch.Size([502, 174]) torch.Size([502, 174])
 
 |Tensor|Shape|Description|
 |--|--|--|
-|`input_1`|`[B, L1]`|`[CLS] + goal + [SEP] + sol1 + [EOS]` 的 Token IDs|
-|`input_2`|`[B, L2]`|`[CLS] + goal + [SEP] + sol2 + [EOS]` 的 Token IDs|
-|`mask_1`|`[B, L1]`|`input_1` 的有效 Token Mask|
-|`mask_2`|`[B, L2]`|`input_2` 的有效 Token Mask|
-|`labels`|`[B]`|PIQA标签，0 表示 sol1 正确，1 表示 sol2 正确|
+|`goal_ids`|`[B, Lg]`| Goal 的 Token IDs |
+|`goal_mask`|`[B, Lg]`| Goal 的有效 Token Mask |
+|`sol_ids`|`[B, 2, Ls]`| 每个 Goal 对应的两个 Solution 的 Token IDs |
+|`sol_mask`|`[B, 2, Ls]`| Solution IDs 的有效 Token Mask |
+|`labels`|`[B]`| PIQA标签，0 表示 sol1 正确，1 表示 sol2 正确|
 
 
 其中：
 
-- `B` 为 batch size
-- `L1`、`L2` 为当前 batch 中对应序列的最大长度
-- `input_1` 和 `input_2` 的长度不要求相同
+- `B` - batch size
+- `Lg` - Goal Token 序列的长度
+- `Ls` - Solution 序列的最大长度
 
-由于使用动态 Padding，短于当前 batch 最大长度的序列会使用 PAD Token 补齐。
+由于使用动态 Padding，短于 Solution 序列的最大长度的 另一个 Solution 序列会使用 PAD Token 补齐。
 
 # Input Sequence Format
 
 每个 PIQA 样本会被转换为两个输入序列：
 
 ```
-[CLS] goal [SEP] sol1 [EOS]
-[CLS] goal [SEP] sol2 [EOS]
+[goal tokens]
+[[solution 1 tokens],
+ [solution 2 tokens]]
 ```
 
 例如：
 
 ```
-[CLS] To achieve a brown monkey color for the monkey cupcake [SEP]
-Use chocolate frosting to ice the cupcake [EOS]
-
-[CLS] To achieve a brown monkey color for the monkey cupcake [SEP]
-Use green frosting to ice the cupcake [EOS]
+Goal: [To get a strike in bowling,]
+Solutions: [[knock down 10 pins with a single bowl.],
+            [knock down 8 pins with a single bowl.]]
 ```
 
-模型需要比较两个输入序列，并根据 label 判断两个 solution 中哪个更加合理，最后输出一个长度为 [2] 的 logits 序列。
+模型需要接收 Goal，并比较两个 Solution 序列，判断两个 solution 中哪个更加合理，最后输出一个长度为 [2] 的 logits 序列。
 
 # Recovering Text from Token IDs
 
 可以使用 SentencePiece Tokenizer 将 Token IDs 逆向还原为文本。
 
 ```python
-input_1, input_2, mask_1, mask_2, labels = next(iter(train_loader))
+goal_ids, goal_mask, sol_ids, sol_mask, labels = next(iter(train_loader))
 
-text_1 = tokenizer.decode_ids(input_1[0][mask_1[0]].tolist())
-text_2 = tokenizer.decode_ids(input_2[0][mask_2[0]].tolist())
+goal_text = tokenizer.decode_ids(goal_ids[0][goal_mask[0]].tolist())
+sol_1_text = tokenizer.decode_ids(sol_ids[0][0][sol_mask[0][0]].tolist())
+sol_2_text = tokenizer.decode_ids(sol_ids[0][1][sol_mask[0][1]].tolist())
 
-print(text_1)
-print(text_2)
+print(goal_text)
+print(sol_1_text)
+print(sol_2_text)
 ```
 
 输出：
 
 ```
-[CLS] To achieve a brown monkey color for the monkey cupcake[SEP] Use chocolate frosting to ice the cupcake
-[CLS] To achieve a brown monkey color for the monkey cupcake[SEP] Use green frosting to ice the cupcake
+how do you poke something?
+touch it with three fingers.
+touch it with one finger.
 ```
 
-这里通过 mask 过滤掉了 Padding Token，因此只对实际有效的 Token 进行 Decode。
+注：由于使用了 Mask 和 Goal, Solution 语义分离，因此不再需要 [EOS], [SEP] 等特殊标记 Token。
 
 # Note
 
-- mask_1 和 mask_2 用于区分有效 Token 和 Padding Token。对于 Transformer，Mask 可以用于 Attention 计算，以避免模型关注 Padding Token。对于 RNN、GRU、LSTM 等 Sequential 模型，Mask 可以用于计算每个序列的实际长度，随后可以结合 pack_padded_sequence 等机制减少 Padding 带来的无效计算。
+- goal_mask 和 sol_mask 用于区分有效 Token 和 Padding Token。对于 Transformer，Mask 可以用于 Attention 计算，以避免模型关注 Padding Token。对于 RNN、GRU、LSTM 等 Sequential 模型，Mask 可以用于计算每个序列的实际长度，随后可以结合 pack_padded_sequence 等机制减少 Padding 带来的无效计算。
 - DataLoader 不会固定 Tokenizer 的实现细节，调用者需要提供一个已经初始化的 SentencePiece Tokenizer，如果后续更新了 Tokenizer，只需要加载新的模型文件并重新初始化 Tokenizer，而 DataLoader 的调用方式无需改变。
