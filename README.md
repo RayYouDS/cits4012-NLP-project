@@ -22,21 +22,22 @@
 
 # 里程碑
 
-| No  | Target                                 | Content                                                                                                       |
-| --- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| M0  | Specifications  | 协作规范、数据集选择等 |
-| M1  | Data Pipeline  | Raw data -> Dataloader, incl.<br>- Preprocessing<br>- Tokenizer |
-| M2  | Minimum Model  | 设计一个可以跑通的最小模型   |
-| M3  | Model Selection  | 选择一个模表现最好的模型作为主模型   |
-| M4  | Main Exp. and baseline | 对主模型进行基准测试和hyperparameter grid search  |
-| M5  | Fix model architecture and hypermeters | 确定最终模型架构和 Hyperparameters，并冻结主要实验设置 |
-| M6  | Ablation and Qualitative Analysis      | 消融实验：移除注意力、candidate comparison/gate 等，验证模型组件对模型表现的影响，绘制注意力热力图，给出成功、失败案例  |
-| M7  | Report and Reproduce  | 撰写报告、引用文献、转写为 Jupyter Notebook、在 Colab 上进行复现测试  |
-| M8  | Final Check Metting  | 冻结报告修改，团队成员交叉检查最终提交材料 |
+| No  | Target | Content | DDL |
+| --- | --- | --- | --- |
+| M0  | Specifications  | 协作规范、数据集选择等 |-|
+| M1  | Data Pipeline  | Raw data -> Dataloader, incl.<br>- Preprocessing<br>- Tokenizer |2026-09-27|
+| M2  | Minimum Model  | 设计一个可以跑通的最小模型   |-|
+| M3  | Model Selection  | 选择一个模表现最好的模型作为主模型   |2026-10-04|
+| M4  | Main Exp. and baseline | 对主模型进行基准测试和hyperparameter grid search  |-|
+| M5  | Fix model architecture and hypermeters | 确定最终模型架构和 Hyperparameters，并冻结主要实验设置 |-|
+| M6  | Ablation and Qualitative Analysis      | 消融实验：移除注意力、candidate comparison/gate 等，验证模型组件对模型表现的影响，绘制注意力热力图，给出成功、失败案例  |2026-10-11|
+| M7  | Report and Reproduce  | 撰写报告、引用文献、转写为 Jupyter Notebook、在 Colab 上进行复现测试  |-|
+| M8  | Final Check Metting  | 冻结报告修改，团队成员交叉检查最终提交材料 |2026-10-17|
 
 
 # 协作规范
 
+- 模型训练的 Hyperparameters 保存为 JSON 文件到 `config` 目录中
 - 为防止进度阻塞，原则上每个主要功能都应有两人共同参与设计或验证
 - 模块之间统一使用 repo 内的绝对导入；所有上层代码、实验、测试代码从 repo 根目录运行
   - 例：模块之间使用 repo 内绝对导入 - `train_tokenizer.py`
