@@ -1,0 +1,6 @@
+{
+    "batch_size" : 1000,
+    "learning_rate" : 0.01,
+    "total_epochs" : 5000,
+    "hidden_size" : 100
+}
