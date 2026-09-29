@@ -45,109 +45,91 @@ class PIQADataset(Dataset):
         }
 
 
-# ================ Collator ========================
+class PIQASequenceBuilder:
+    '''
+    Class that make input sequence: [CLS] goal [SEP] sol1/2 [EOS]
+    '''
+    def __init__(self, tokenizer):
+        self.cls_id = tokenizer.piece_to_id("[CLS]")
+        self.sep_id = tokenizer.piece_to_id("[SEP]")
+        self.eos_id = tokenizer.eos_id()
+
+        if self.cls_id == tokenizer.unk_id():
+            raise ValueError("[CLS] is not defined in tokenizer")
+
+        if self.sep_id == tokenizer.unk_id():
+            raise ValueError("[SEP] is not defined in tokenizer")
+
+    def build(self, goal, solution):
+
+        return [
+            self.cls_id,
+            *goal,
+            self.sep_id,
+            *solution,
+            self.eos_id
+        ]
+
+
+
+
 
 class PIQACollator:
-    """
-    Convert a list of PIQA samples into padded tensors.
-
-    Output:
-        goal_ids:
-            LongTensor, shape (B, Lg)
-
-        goal_mask:
-            BoolTensor, shape (B, Lg)
-            True = valid token
-            False = padding
-
-        sol_ids:
-            LongTensor, shape (B, 2, Ls)
-
-        sol_mask:
-            BoolTensor, shape (B, 2, Ls)
-            True = valid token
-            False = padding
-
-        labels:
-            LongTensor, shape (B,)
-    """
-
     def __init__(self, tokenizer):
+
         self.pad_id = tokenizer.pad_id()
+
+        self.sequence_builder = PIQASequenceBuilder(tokenizer)
 
     def __call__(self, batch):
 
-        goals = []
-        solutions = []
+        input_1 = []
+        input_2 = []
         labels = []
 
         for item in batch:
 
-            goals.append(
-                torch.tensor(item["goal"], dtype=torch.long)
+            seq1 = self.sequence_builder.build(
+                item["goal"],
+                item["sol1"]
             )
 
-            # 两个 candidate
-            solutions.append([
-                torch.tensor(item["sol1"], dtype=torch.long),
-                torch.tensor(item["sol2"], dtype=torch.long)
-            ])
+            seq2 = self.sequence_builder.build(
+                item["goal"],
+                item["sol2"]
+            )
+
+            input_1.append(
+                torch.tensor(seq1, dtype=torch.long)
+            )
+
+            input_2.append(
+                torch.tensor(seq2, dtype=torch.long)
+            )
 
             labels.append(item["label"])
 
-        # =========================
-        # Goal
-        # =========================
-
-        goal_ids = pad_sequence(
-            goals,
+        input_1 = pad_sequence(
+            input_1,
             batch_first=True,
             padding_value=self.pad_id
         )
 
-        goal_mask = goal_ids != self.pad_id
-
-        # =========================
-        # Solutions
-        # =========================
-
-        # 找到当前 batch 中所有 candidate 的最大长度
-        max_sol_len = max(
-            sol.numel()
-            for sample in solutions
-            for sol in sample
+        input_2 = pad_sequence(
+            input_2,
+            batch_first=True,
+            padding_value=self.pad_id
         )
 
-        # 手动使用同一个 max_sol_len padding
-        sol_ids = torch.full(
-            (len(batch), 2, max_sol_len),
-            self.pad_id,
-            dtype=torch.long
-        )
-
-        for i, sample in enumerate(solutions):
-            for j, sol in enumerate(sample):
-                sol_ids[i, j, :len(sol)] = sol
-
-        sol_mask = sol_ids != self.pad_id
-
-        # =========================
-        # Labels
-        # =========================
+        mask_1 = input_1 != self.pad_id
+        mask_2 = input_2 != self.pad_id
 
         labels = torch.tensor(
             labels,
             dtype=torch.long
         )
 
-        return (
-            goal_ids,
-            goal_mask,
-            sol_ids,
-            sol_mask,
-            labels
-        )
-
+        return input_1, input_2, mask_1, mask_2, labels
 
 
 def get_piqa_dataloaders(base_path:Path, tokenizer, batch_size:int):
@@ -156,27 +138,25 @@ def get_piqa_dataloaders(base_path:Path, tokenizer, batch_size:int):
     '''
     train_dataset, valid_dataset, test_dataset = tokenize_piqa_dataframe(tokenizer=tokenizer, base_path=base_path)
 
-    collator = PIQACollator(tokenizer)
-
     train_loader = DataLoader(
         PIQADataset(train_dataset),
         batch_size=batch_size,
         shuffle=True,
-        collate_fn=collator
+        collate_fn=PIQACollator(tokenizer)
     )
 
     validate_loader = DataLoader(
         PIQADataset(valid_dataset),
         batch_size=batch_size,
         shuffle=False,
-        collate_fn=collator
+        collate_fn=PIQACollator(tokenizer)
     )
 
     test_loader = DataLoader(
         PIQADataset(test_dataset),
         batch_size=batch_size,
         shuffle=False,
-        collate_fn=collator
+        collate_fn=PIQACollator(tokenizer)
     )
 
     return train_loader, validate_loader, test_loader
