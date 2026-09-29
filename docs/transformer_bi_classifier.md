@@ -13,11 +13,18 @@
 
 ## Encoder
 
+Encoder 接收已经编码好的完整 Token ID 序列。对于每个 Candidate，输入序列遵循：
+
+```
+[CLS] GOAL [SEP] SOLUTION [EOS]
+```
+
 Encoder 接收 Token ID 序列，在 `model.encode()` 中进行：
 
-- Embedding：将 ID 映射为向量，并添加 Positional Embedding 信息；Positional Embedding 使用经典的 Sinusoidal Positional Encoding 算法，因此位置编码本身不包含可训练参数
-- Transformer Encoder- 把 Embedding 送入一个个多头注意力层，进行语义更新和特征提取
-- 将更新好的语义进行 Mean Polling，把每个 Batch 中的序列 Embedding 转为一个固定长度的向量，作为这个序列最终的语义表示
+- Embedding：将 ID 映射为向量，并乘以 sqrt(Embedding_Dim) 进行缩放
+- Positional Encoding：添加 Positional Embedding 信息；Positional Embedding 使用经典的 Sinusoidal Positional Encoding 算法，因此位置编码本身不包含可训练参数
+- Transformer Encoder： 把 Embedding 送入一个个多头注意力层，进行语义更新和特征提取
+- [CLS] Pooling：提取 [CLS] (index=0) 位置的聚合特征向量，作为整个 Goal–Solution 序列的固定长度语义表示
 
 随后语义向量被送入 Linear Classifier 进行评分，返回评分的 Logits，后续可以用于计算交叉熵。
 
@@ -25,39 +32,93 @@ Sinusoidal Positional Encoding 的位置可视化图如下：
 
 <img src="./figures/sinusoidal_positional_encoding.png" width="600">
 
+由于 Goal 和 Solution 被放在同一个序列中，Self-Attention 可以直接建立 Goal Token 与 Solution Token 之间的关系：
+
+```
+[CLS] GOAL [SEP] SOLUTION [EOS]
+          ↕       ↕
+       Self-Attention
+```
+
+这是注意力提高模型表现的基本原理。
+
 ## Classification
 
-对于 PIQA 中的每个样本，模型分别对 Goal 和两个 Candidate Solution 进行编码。
+对于 PIQA 中的每个样本，模型分别对两个 Candidate 进行完整序列编码。
 
-得到：
+两个 Candidate 的输入分别为：
 
 ```
-Goal Representation:
+Candidate 1:
+[CLS] GOAL [SEP] SOLUTION 1 [EOS]
+
+Candidate 2:
+[CLS] GOAL [SEP] SOLUTION 2 [EOS]
+```
+
+两个 Candidate 使用同一个 Transformer Encoder 和 Linear Classifier，即模型参数在两个 Candidate 之间共享。
+
+对于 Candidate 1：
+
+```
+[B, L1]
+   ↓
+Transformer Encoder
+   ↓
+[B, L1, D]
+   ↓
+取 [CLS]
+   ↓
 [B, D]
-
-Solution Representations:
-[B, 2, D]
+   ↓
+Linear Classifier
+   ↓
+[B, 1]
 ```
 
-随后将 Goal Representation 分别与两个 Candidate Solution 的表示进行拼接：
+对于 Candidate 2：
 
 ```
-[B, 2, D] + [B, 2, D]
+[B, L2]
+   ↓
+Transformer Encoder
+   ↓
+[B, L2, D]
+   ↓
+取 [CLS]
+   ↓
+[B, D]
+   ↓
+Linear Classifier
+   ↓
+[B, 1]
+```
+
+最后将两个 Candidate 的 Logit 拼接：
+
+```
+[B, 1] + [B, 1]
         ↓
-[B, 2, 2D]
-```
-
-最后通过 Linear Classifier 为两个 Candidate 分别生成一个 Logit：
-
-```
-[B, 2, 2D]
-      ↓
-[B, 2, 1]
-      ↓
 [B, 2]
 ```
 
-最终输出的 [B, 2] 表示两个 Candidate 的分类 Logits，可以直接用于 CrossEntropyLoss。
+最终输出的 [B, 2] 表示两个 Candidate 的分类 Logits：
+
+```
+logits[:, 0] → Candidate 1
+logits[:, 1] → Candidate 2
+```
+
+可以直接用于 CrossEntropyLoss：
+
+```
+loss = F.cross_entropy(
+    logits,
+    labels
+)
+```
+
+其中 labels 的形状为 [B]，取值为 0 或 1。
 
 # 初始化
 
@@ -107,13 +168,13 @@ tf_model.train()
 
 epoch_loss = 0.0
 
-for goal_ids, goal_mask, sol_ids, sol_mask, labels in train_loader:
+for input_1, input_2, mask_1, mask_2, labels in train_loader:
 
     start_ts = perf_counter()
     # Forward
     tf_optimiser.zero_grad()
 
-    logits = tf_model.forward(goal_ids, goal_mask, sol_ids, sol_mask)
+    logits = tf_model.forward(input_1, input_2, mask_1, mask_2)
 
     # Loss
     loss = criterion(
@@ -133,21 +194,12 @@ for goal_ids, goal_mask, sol_ids, sol_mask, labels in train_loader:
     time_elips = end_ts - start_ts
     
     print(
-        f"B={sol_ids.shape[0]}, "
-        f"Lg={goal_ids.shape[1]}, "
-        f"Ls={sol_ids.shape[2]}, "
-        f"time={time_elips:.2f}s"
+        f"time={time_elips:.2f}, "
+        f"loss={loss.item():.2f}"
     )
 ```
 
-其中：
-
-- B：当前 Batch Size
-- Lg：当前 Batch 中 Goal 的最大序列长度
-- Ls：当前 Batch 中 Candidate Solution 的最大序列长度
-- time：该 Batch 完成一次 Forward + Backward + Optimizer Step 所需的时间
-
-由于 DataLoader 使用 Dynamic Padding，因此不同 Batch 的 Lg 和 Ls 可能不同。
+由于 DataLoader 使用 Dynamic Padding，因此不同 Batch 的 L1 和 L2 可能不同。
 
 注意：在自己的 PC 上进行训练时，不要将数据的 Batch Size 设置太高（推荐 200），否则**极易造成内存溢出**。
 
@@ -183,3 +235,7 @@ PyTorch 的 nn.MultiheadAttention 本身支持直接返回 Attention Weights。
 ## 如何针对该模型进行消融实验
 
 施工中 🚧
+
+初步计划围绕 Transformer Encoder 的关键组件进行消融实验。
+
+实验时应保持训练数据、数据划分、Tokenizer、训练流程和主要超参数一致，每次只改变一个目标组件，以便分析该组件对模型性能的影响。
