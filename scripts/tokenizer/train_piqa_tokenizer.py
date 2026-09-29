@@ -29,7 +29,7 @@ with temp_corpus_path.open("w", encoding="utf-8") as f:
 # ======================= Train Tokenizer =====================================
 import sentencepiece as spm
 
-model_prefix = output_path / 'test_bpe'
+model_prefix = output_path / 'piqa_bpe_v2'
 
 spm.SentencePieceTrainer.train(input=str(temp_corpus_path),
                                 model_prefix=str(model_prefix),
