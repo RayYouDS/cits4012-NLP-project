@@ -51,13 +51,11 @@ class TransformerClassifier(nn.Module):
         )
 
         # 4. 线性分类头，映射成 logits
-        # goal + sloution -> score
         self.classifier = nn.Linear(embedding_dim, 1)
 
 
     def encode(self, input_ids, mask):
-        # 1. 获取 Embedding 并乘以 sqrt(d_model) 保持数值量级匹配
-        x = self.embedding(input_ids)
+        # 1. 获取 Embedding 并乘以 sqrt(embedding_dim) 保持数值量级匹配
         x = self.embedding(input_ids) * math.sqrt(self.embedding_dim)
 
         # 2. 叠加正弦位置编码
@@ -71,6 +69,7 @@ class TransformerClassifier(nn.Module):
         )
 
         # 提取 [CLS] (index=0) 位置的聚合特征向量 -> [B, D]
+        # 原理：Transformer 通过 Self-Attention 让 Index 0 的 [CLS] 看到全局上下文，从而汇聚全句语义。
         return x[:, 0, :]
 
     
@@ -95,3 +94,14 @@ class TransformerClassifier(nn.Module):
         )
 
         return logits
+
+    @torch.no_grad()
+    def predict(self, input_1, input_2, mask_1, mask_2):
+        '''
+        不带反向传播的预测函数，不涉及梯度下降
+        这里不会打开 model.eval()，防止在训练过程中忘记关闭
+        进行性能测试时应手动调整模型的 train 和 eval 模式
+        '''
+        outputs = self.forward(input_1, input_2, mask_1, mask_2)
+
+        return outputs
