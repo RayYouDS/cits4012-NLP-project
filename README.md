@@ -4,6 +4,7 @@
 - [Tokenizer APi Reference](docs/tokenizer.md)
 - [Get Data Loader API Reference](docs/get_data_loader.md)
 - [Transformer Model API Document](docs/transformer_bi_classifier.md)
+- [RNN with Transformer Model API Document](docs/rnn_attention.md)
 
 # Assignment 简述
 
