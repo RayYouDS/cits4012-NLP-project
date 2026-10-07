@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pandas as pd
 import torch
@@ -126,3 +128,32 @@ def evaluate(model, data_loader, device="cpu"):
     metrics.update(compute_metrics(labels, preds))
 
     return metrics, predictions
+
+
+def mcnemar_test(correct_a, correct_b) -> dict:
+    """配对比较两个模型在同一批题上的对错。
+
+    only_a / only_b 是只有一方做对的题数。chi2 使用连续性校正
+    (|b - c| - 1)^2 / (b + c)。b + c = 0 时没有分歧，p 取 1。
+    """
+    correct_a = np.asarray(correct_a).astype(bool)
+    correct_b = np.asarray(correct_b).astype(bool)
+    if correct_a.shape != correct_b.shape:
+        raise ValueError(
+            f"correct_a and correct_b must have the same shape, "
+            f"got {correct_a.shape} and {correct_b.shape}")
+
+    only_a = int(np.sum(correct_a & ~correct_b))
+    only_b = int(np.sum(~correct_a & correct_b))
+    discordant = only_a + only_b
+    if discordant == 0:
+        return {"only_a": only_a, "only_b": only_b, "chi2": 0.0, "p_value": 1.0}
+
+    chi2 = (abs(only_a - only_b) - 1) ** 2 / discordant
+    p_value = math.erfc(math.sqrt(chi2 / 2.0))
+    return {
+        "only_a": only_a,
+        "only_b": only_b,
+        "chi2": float(chi2),
+        "p_value": float(p_value),
+    }
