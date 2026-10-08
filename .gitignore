@@ -57,7 +57,7 @@ desktop.ini
 
 # Model checkpoints and trained weights
 
-*.pt
+# *.pt
 *.pth
 *.ckpt
 *.safetensors
@@ -129,3 +129,6 @@ experiments/
 *.tar
 *.gz
 *.7z
+
+# temp files
+*.txt

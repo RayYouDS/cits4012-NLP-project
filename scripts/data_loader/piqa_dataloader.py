@@ -161,3 +161,21 @@ def get_piqa_dataloaders(base_path:Path, tokenizer, batch_size:int):
 
     return train_loader, validate_loader, test_loader
 
+
+
+def preload_dataloader_to_gpu(data_loader, device):
+    """
+    一次性把 DataLoader 的数据搬到 GPU 里
+    """
+
+    gpu_batches = []
+
+    for batch in data_loader:
+        gpu_batch = tuple(
+            tensor.to(device, non_blocking=True)
+            for tensor in batch
+        )
+
+        gpu_batches.append(gpu_batch)
+
+    return gpu_batches

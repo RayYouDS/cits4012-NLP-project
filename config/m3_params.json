@@ -1,0 +1,21 @@
+{
+    "output_dir": "reports/m3_results",
+    "tokenizer": "scripts/tokenizer/piqa_bpe_v3.model",
+    "models": ["transformer", "gru", "lstm"],
+    "learning_rates": [0.001, 0.0003],
+    "seeds": [4012],
+    "optimizer": "adam",
+    "weight_decay": null,
+    "momentum": 0.9,
+    "batch_size": 512,
+    "max_epochs": 1000,
+    "patience": null,
+    "grad_clip": null,
+    "num_workers": 2,
+    "embedding_dim": 100,
+    "hidden_size": 100,
+    "bidirectional": true,
+    "enable_attention": true,
+    "num_heads": 4,
+    "num_layers": 3
+}

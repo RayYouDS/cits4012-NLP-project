@@ -19,7 +19,8 @@ class RNNWithAttention(nn.Module):
 
         architecture="gru",
         bidirectional=True,       # 默认开启双向
-        enable_attention = True
+        enable_attention = True,
+        dropout_rate=0.1  # 增加全局 dropout_rate 参数
     ):
         super().__init__()
 
@@ -54,6 +55,8 @@ class RNNWithAttention(nn.Module):
             padding_idx=padding_idx
         )
 
+        # 用于 embedding 层的 dropout
+        self.emb_dropout = nn.Dropout(p=dropout_rate)
 
         self.rnn = rnn_class(
             input_size=embedding_dim,
@@ -68,6 +71,9 @@ class RNNWithAttention(nn.Module):
         # 双向: hidden_dim * 2
         self.attention = SelfAttention(self.rnn_output_dim)
 
+        # 全连接层前的 Dropout (防过拟合核心)
+        self.fc_dropout = nn.Dropout(p=dropout_rate)
+
         self.classifier = nn.Linear(self.rnn_output_dim, 1)
 
 
@@ -75,6 +81,7 @@ class RNNWithAttention(nn.Module):
 
         # [B, L] -> [B, L, E]
         x = self.embedding(input_ids)
+        x = self.emb_dropout(x) # embedding 加入 dropout
 
         # 数据预处理：将数据和实际序列长度打包，减少无效 Pad 计算
         lengths = mask.sum(dim=1).long()  # 保持在 GPU 上
@@ -123,12 +130,18 @@ class RNNWithAttention(nn.Module):
 
             # 还需要根据单向和双向进行特殊处理
             if self.bidirectional:
-                # last_hidden[0] 为正向末尾状态，last_hidden[1] 为反向末尾状态，拼接后获得完整的编码
-                context = torch.cat([last_hidden[0], last_hidden[1]], dim=-1)
+                # last_hidden 形状为 [num_layers * 2, B, H]
+                # -2 索引代表最后一层的 Forward，-1 代表最后一层的 Backward
+                forward_last = last_hidden[-2]
+                backward_last = last_hidden[-1]
+                context = torch.cat([forward_last, backward_last], dim=-1)
 
             else:
-                # 单向模式: [1, B, H] -> [B, H]
-                context = last_hidden.squeeze(0)
+                # 单向模式: 取最后一层的隐藏状态 [-1] -> [B, H]
+                context = last_hidden[-1]
+
+        # 在输入 Classifier 前施加 Dropout
+        context = self.fc_dropout(context)
 
         return context, weights
 
