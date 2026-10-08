@@ -26,6 +26,7 @@ from scripts.data_loader.piqa_dataloader import (
     PIQACollator,
     PIQADataset,
     tokenize_piqa_dataframe,
+    preload_dataloader_to_gpu
 )
 from scripts.evaluation.evaluate import evaluate, mcnemar_test
 from scripts.models.rnn_attention_refactored import RNNWithAttention
@@ -164,8 +165,23 @@ def run(cfg):
 
     val_loader = make_loader(
         valid_df, collator, cfg["batch_size"], num_workers, pin_memory, shuffle=False)
+
+    val_batches = preload_dataloader_to_gpu(
+        val_loader,
+        device
+    )
+
+    del val_loader
+    
     train_eval_loader = make_loader(
         train_eval_df, collator, cfg["batch_size"], num_workers, pin_memory, shuffle=False)
+
+    train_eval_batches = preload_dataloader_to_gpu(
+        train_eval_loader,
+        device
+    )
+
+    del train_eval_loader
 
     summary_rows = []
     histories = []
@@ -186,6 +202,13 @@ def run(cfg):
                     shuffle=True, generator=generator, lengths=lengths,
                 )
 
+                train_batches = preload_dataloader_to_gpu(
+                    train_loader,
+                    device
+                )
+
+                del train_loader
+
                 set_seed(seed)
                 model = build_model(model_name, vocab_size, pad_id, cfg).to(device)
                 n_params = sum(p.numel() for p in model.parameters())
@@ -196,17 +219,17 @@ def run(cfg):
                 )
 
                 model, history = train(
-                    model, train_loader, val_loader, optimizer, device,
+                    model, train_batches, val_batches, optimizer, device,
                     max_epochs=int(cfg["max_epochs"]),
                     patience=cfg.get("patience"),
                     grad_clip=cfg.get("grad_clip"),
-                    train_eval_loader=train_eval_loader,
+                    train_eval_loader=train_eval_batches,
                     verbose=True,
                 )
 
                 torch.save(model.state_dict(), output_dir / f"{run_id}_best.pt")
                 history.to_csv(output_dir / f"{run_id}_history.csv", index=False)
-                val_metrics, predictions = evaluate(model, val_loader, device)
+                val_metrics, predictions = evaluate(model, val_batches, device)
                 predictions.to_csv(output_dir / f"{run_id}_val_predictions.csv", index=False)
 
                 best = history.loc[history["valid_accuracy"].idxmax()]
