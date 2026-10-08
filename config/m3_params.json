@@ -1,7 +1,7 @@
 {
     "output_dir": "reports/m3_results",
     "tokenizer": "scripts/tokenizer/piqa_bpe_v3.model",
-    "models": ["gru", "lstm", "transformer"],
+    "models": ["transformer", "gru", "lstm"],
     "learning_rates": [0.001, 0.0003],
     "seeds": [4012],
     "optimizer": "adam",

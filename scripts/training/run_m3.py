@@ -186,8 +186,8 @@ def run(cfg):
     summary_rows = []
     histories = []
 
-    for seed in cfg["seeds"]:
-        for model_name in cfg["models"]:
+    for model_name in cfg["models"]:
+        for seed in cfg["seeds"]:
             for lr in cfg["learning_rates"]:
                 lr = float(lr)
                 seed = int(seed)
