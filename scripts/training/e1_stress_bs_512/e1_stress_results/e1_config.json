@@ -1,5 +1,5 @@
 {
-  "output_dir": "/content/drive/MyDrive/cits4012/e1_full",
+  "output_dir": "/content/e1_full",
   "tokenizer": "scripts/tokenizer/piqa_bpe_v3.model",
   "models": [
     "transformer",
@@ -13,10 +13,10 @@
   "seeds": [
     4012
   ],
-  "optimizer": "adam",
+  "optimizer": "adamw",
   "weight_decay": null,
   "momentum": 0.9,
-  "batch_size": 2056,
+  "batch_size": 512,
   "max_epochs": 300,
   "patience": null,
   "grad_clip": null,
