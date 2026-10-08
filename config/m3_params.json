@@ -7,7 +7,7 @@
     "optimizer": "adam",
     "weight_decay": null,
     "momentum": 0.9,
-    "batch_size": 64,
+    "batch_size": 512,
     "max_epochs": 1000,
     "patience": null,
     "grad_clip": null,
