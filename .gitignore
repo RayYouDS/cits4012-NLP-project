@@ -66,7 +66,7 @@ desktop.ini
 # Checkpoint directories
 
 checkpoints/
-models/
+# models/
 weights/
 
 # ============================================================
