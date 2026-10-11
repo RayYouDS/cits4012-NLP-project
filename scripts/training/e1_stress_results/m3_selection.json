@@ -1,0 +1,42 @@
+{
+  "alpha": 0.05,
+  "ranking": [
+    {
+      "model": "lstm",
+      "learning_rate": 0.001,
+      "valid_accuracy_mean": 0.6127023661270237,
+      "valid_accuracy_std": 0.0,
+      "n_seeds": 1
+    },
+    {
+      "model": "gru",
+      "learning_rate": 0.001,
+      "valid_accuracy_mean": 0.5940224159402242,
+      "valid_accuracy_std": 0.0,
+      "n_seeds": 1
+    },
+    {
+      "model": "transformer",
+      "learning_rate": 0.001,
+      "valid_accuracy_mean": 0.5909090909090909,
+      "valid_accuracy_std": 0.0,
+      "n_seeds": 1
+    }
+  ],
+  "seed": 4012,
+  "first": {
+    "model": "lstm",
+    "learning_rate": 0.001
+  },
+  "second": {
+    "model": "gru",
+    "learning_rate": 0.001
+  },
+  "mcnemar": {
+    "only_a": 245,
+    "only_b": 215,
+    "chi2": 1.8282608695652174,
+    "p_value": 0.17633310107637962
+  },
+  "significant": false
+}
