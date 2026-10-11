@@ -77,7 +77,7 @@ class TransformerClassifier(nn.Module):
 
 
     def encode(self, input_ids, mask):
-        # 1. 获取 Embedding 并乘以 sqrt(embedding_dim) 保持数值量级匹配
+        # 1. 获取 Embedding
         x = self.embedding(input_ids)
 
         if self.enable_pos_emb:

@@ -19,8 +19,8 @@ def extract_encoder_attentions(model, ids, mask):
     '''
     # model.eval()  # 默认不进行状态管理，需要在函数外手动调整模型状态
 
-    # Embedding + scaling
-    x = model.embedding(ids) * math.sqrt(model.embedding_dim)
+    # Embedding (no scaling)
+    x = model.embedding(ids)
 
     # Optional positional encoding
     if model.enable_pos_emb:
