@@ -20,12 +20,18 @@ class TransformerClassifier(nn.Module):
         num_layers=2,
 
         dropout_rate=0.1,
+        pooling = "cls"
     ):
         super().__init__()
 
         if embedding_dim % num_heads != 0:
             # 数值检查：embedding_dim 必须能被 num_heads 整除
             raise ValueError("embedding_dim must be divisible by num_heads")
+
+        if pooling not in ("cls", "mean"):
+            raise ValueError("pooling must be 'cls' or 'mean'")
+
+        self.pooling = pooling
 
         self.embedding_dim = embedding_dim
         self.enable_pos_emb = enable_pos_emb
@@ -87,12 +93,23 @@ class TransformerClassifier(nn.Module):
             src_key_padding_mask=padding_mask
         )
 
-        # 提取 [CLS] (index=0) 位置的聚合特征向量 -> [B, D]
-        # 原理：Transformer 通过 Self-Attention 让 Index 0 的 [CLS] 看到全局上下文，从而汇聚全句语义。
-        cls_feat = x[:, 0, :]
-        cls_feat = self.fc_dropout(cls_feat)    # 在输入分类器之前应用 fc_dropout
+        # Pooling: [B, L, D] -> [B, D]
+        if self.pooling == "cls":
+            # 提取 [CLS] (index=0) 位置的聚合特征向量 -> [B, D]
+            # 原理：Transformer 通过 Self-Attention 让 Index 0 的 [CLS] 看到全局上下文，从而汇聚全句语义。
+            pooled = x[:, 0, :]
+
+
+        elif self.pooling == "mean":
+            # 只对有效 token 求平均，不包含 padding
+            valid_mask = mask.unsqueeze(-1).to(dtype=x.dtype)  # [B, L, 1]
+
+            pooled = (x * valid_mask).sum(dim=1)               # [B, D]
+            pooled = pooled / valid_mask.sum(dim=1).clamp(min=1)
+
+        pooled = self.fc_dropout(pooled)    # 在输入分类器之前应用 fc_dropout
         
-        return cls_feat
+        return pooled
 
     
     def forward(
