@@ -12,6 +12,7 @@ class TransformerClassifier(nn.Module):
         self,
         vocab_size=8000,
         embedding_dim=64,
+        enable_pos_emb = True,
         padding_idx = 3,
         max_seq_length = 2048,
 
@@ -22,7 +23,12 @@ class TransformerClassifier(nn.Module):
     ):
         super().__init__()
 
+        if embedding_dim % num_heads != 0:
+            # 数值检查：embedding_dim 必须能被 num_heads 整除
+            raise ValueError("embedding_dim must be divisible by num_heads")
+
         self.embedding_dim = embedding_dim
+        self.enable_pos_emb = enable_pos_emb
 
         # 1. Embedding 层
         self.embedding = nn.Embedding(
@@ -31,13 +37,14 @@ class TransformerClassifier(nn.Module):
             padding_idx=padding_idx
         )
 
-        self.position_embedding = SinusoidalPositionalEncoding(
-            embedding_dim=embedding_dim,
-            max_length=max_seq_length
-        )
+        if enable_pos_emb:
+            self.position_embedding = SinusoidalPositionalEncoding(
+                embedding_dim=embedding_dim,
+                max_length=max_seq_length
+            )
 
         # 1.5. 位置编码后的 Dropout（遵循 Transformer 标准设计）
-        self.pos_dropout = nn.Dropout(p=dropout_rate)
+        self.emb_dropout = nn.Dropout(p=dropout_rate)
 
         # 2. 多头注意力 encoder
         # 对比实验：不同的 head 数对于精度的影响
@@ -67,9 +74,11 @@ class TransformerClassifier(nn.Module):
         # 1. 获取 Embedding 并乘以 sqrt(embedding_dim) 保持数值量级匹配
         x = self.embedding(input_ids) * math.sqrt(self.embedding_dim)
 
-        # 2. 叠加正弦位置编码
-        x = self.position_embedding(x)
-        x = self.pos_dropout(x)
+        if self.enable_pos_emb:
+            # 2. 叠加正弦位置编码
+            x = self.position_embedding(x)
+
+        x = self.emb_dropout(x) # 即使没有位置编码，也进行原始 embedding 的 dropout
         
         padding_mask = ~mask
 
