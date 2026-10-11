@@ -209,7 +209,7 @@ for input_1, input_2, mask_1, mask_2, labels in train_loader:
 
 ## 如何获得注意力矩阵
 
-方法一：自己取出注意力投影矩阵，之后自己给 Embedding 进行一次手动计算注意力
+### 方法一：自己取出注意力投影矩阵，之后自己给 Embedding 进行一次手动计算注意力
 
 ```python
 # 取出注意力投影矩阵
@@ -226,16 +226,30 @@ print(W_V.shape)
 
 这种方法可以帮助理解 Transformer 内部的计算过程，但实现较为复杂，而且需要自行处理 Multi-Head 的拆分、缩放、Softmax、Mask 等逻辑。
 
-方法二：利用原 Encoder，手动进行 Forward 计算
+### 方法二：利用原 Encoder，手动进行 Forward 计算
 
-PyTorch 的 nn.MultiheadAttention 本身支持直接返回 Attention Weights。
+使用 `scripts/models/transformer_attention_tools` 中的工具函数 `extract_encoder_attentions` 进行题取。
 
-**该方法目前还在研究当中，稳定后会第一时间 Push 上代码库。**
+PyTorch 的 nn.MultiheadAttention 本身支持返回 Attention Weights。由于 nn.TransformerEncoderLayer 默认不会直接向外暴露每一层的 Attention Weights，因此可以在不修改原模型结构的情况下，手动执行 Encoder Layer 的 Forward 计算，并提取各层、各个 Head 的注意力权重。
 
-## 如何针对该模型进行消融实验
+提取出的 Attention Weights 可用于后续的可视化分析，包括观察不同 Head 的注意力分布、比较不同 Encoder Layer 的信息交互模式，以及分析 [CLS] Token 对输入序列中其他 Token 的注意力分配。
 
-施工中 🚧
+Attention 权重提取流程：
 
-初步计划围绕 Transformer Encoder 的关键组件进行消融实验。
+1. 将输入 Token IDs 转换为 Embeddings，并根据模型配置添加 Positional Encoding。
 
-实验时应保持训练数据、数据划分、Tokenizer、训练流程和主要超参数一致，每次只改变一个目标组件，以便分析该组件对模型性能的影响。
+2. 逐层执行原 Encoder 的 Self-Attention、残差连接、Layer Normalization 和 Feed-Forward Network，同时保存各层的 Attention Weights。
+
+提取的 Attention Weights 形状为 **[batch_size, num_heads, sequence_length, sequence_length]**。其中，每个矩阵表示一个 Head 中各 Query Token 对各 Key Token 的注意力分配。
+
+之后可以使用 `scripts/models/transformer_attention_tools` 中的工具函数 `plot_attention_heads` 直接绘制多头注意力。原理如下：
+
+1. 使用 SentencePiece Tokenizer 将 Token IDs 映射为可读的 Token 标签。
+
+2. 使用 Matplotlib 和 Seaborn 绘制 Attention Heatmap，并支持将不同 Heads 自动排列为多个子图。
+
+3. 根据 Attention Mask 排除 Padding Token，并可通过样本索引选择较短的输入序列，以提高热图的可读性。
+
+4. 将正确答案标签传入绘图函数，在热图标题中标注对应的候选方案，便于结合 PIQA 任务的真实标签分析模型行为。
+
+需要注意的是，Attention Weights 反映的是模型的信息交互模式，并不直接等同于 Token 对最终分类结果的重要性。对于当前使用 [CLS] 表示进行分类的 Transformer，可以进一步观察最后一层 [CLS] 行的注意力分布，并结合预测结果或消融实验进行分析。
