@@ -39,6 +39,9 @@ ALPHA = 0.05
 
 
 def build_model(name, vocab_size, pad_id, cfg):
+    # 缺省和模型构造函数一致。pooling 若不从 config 读取，mean pooling 训出的
+    # checkpoint 能被按 cls 建的模型加载，不会报错，但评估结果是错的。
+    dropout_rate = cfg.get("dropout_rate", 0.1)
     if name in {"rnn", "gru", "lstm"}:
         return RNNWithAttention(
             vocab_size=vocab_size,
@@ -48,6 +51,7 @@ def build_model(name, vocab_size, pad_id, cfg):
             architecture=name,
             bidirectional=cfg["bidirectional"],
             enable_attention=cfg["enable_attention"],
+            dropout_rate=dropout_rate,
         )
     if name == "transformer":
         return TransformerClassifier(
@@ -57,6 +61,9 @@ def build_model(name, vocab_size, pad_id, cfg):
             max_seq_length=2048,
             num_heads=cfg["num_heads"],
             num_layers=cfg["num_layers"],
+            dropout_rate=dropout_rate,
+            pooling=cfg.get("pooling", "cls"),
+            enable_pos_emb=cfg.get("enable_pos_emb", True),
         )
     raise ValueError(f"unknown model {name}")
 
