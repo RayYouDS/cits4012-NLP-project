@@ -144,7 +144,11 @@ def score_solutions(model, tokenizer, frame, batch_size, device):
         continuation_1 + continuation_2,
         batch_size, device,
     )
-    return totals[:n], counts[:n], totals[n:], counts[n:]
+    sum_1, sum_2 = totals[:n], totals[n:]
+    count_1, count_2 = counts[:n], counts[n:]
+    if not (np.isfinite(sum_1).all() and np.isfinite(sum_2).all()):
+        raise ValueError("score_solutions produced a non-finite score")
+    return sum_1, count_1, sum_2, count_2
 
 
 def scores_to_frame(frame, score_1, score_2):
@@ -165,8 +169,8 @@ def load_lm(model_name, device):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
-    use_fp16 = device.type == "cuda" and "Qwen" in model_name
-    dtype = torch.float16 if use_fp16 else torch.float32
+    # 两个方案有时只差一个词，分数很接近。float16 的舍入可能把高低判反，所以一律 float32。
+    dtype = torch.float32
     model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype)
     model.config.pad_token_id = tokenizer.pad_token_id
     model.to(device)
