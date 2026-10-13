@@ -1,0 +1,2 @@
+model,learning_rate,seed,best_epoch,epochs_run,valid_accuracy,valid_f1,train_eval_accuracy,gap_at_best,seconds_to_best,seconds_total,params
+transformer,0.0003,4012,295,300,0.5921544209215442,0.5920846752068311,0.9925280199252802,0.4003735990037359,949.69,965.76,999985

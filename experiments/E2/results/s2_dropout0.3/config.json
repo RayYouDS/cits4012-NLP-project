@@ -1,0 +1,32 @@
+{
+  "output_dir": "/content/drive/MyDrive/cits4012/e2_full_300/s2_dropout0.3",
+  "tokenizer": "scripts/tokenizer/piqa_bpe_v3.model",
+  "models": [
+    "transformer"
+  ],
+  "learning_rates": [
+    0.0009
+  ],
+  "seeds": [
+    4012
+  ],
+  "optimizer": "adamw",
+  "weight_decay": 0.01,
+  "momentum": 0.9,
+  "batch_size": 512,
+  "max_epochs": 300,
+  "patience": null,
+  "grad_clip": null,
+  "num_workers": 2,
+  "embedding_dim": 100,
+  "hidden_size": 100,
+  "bidirectional": true,
+  "enable_attention": true,
+  "num_heads": 4,
+  "num_layers": 3,
+  "dropout_rate": 0.3,
+  "pooling": "cls",
+  "enable_pos_emb": true,
+  "_from": "s1_adamw_lr0.0009",
+  "_commit": "d0268525b83d7af9f5d5b3a684b6ad8dec00d4d7"
+}

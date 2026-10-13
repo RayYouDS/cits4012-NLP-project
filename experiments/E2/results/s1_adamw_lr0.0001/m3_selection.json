@@ -1,0 +1,12 @@
+{
+  "alpha": 0.05,
+  "ranking": [
+    {
+      "model": "transformer",
+      "learning_rate": 0.0001,
+      "valid_accuracy_mean": 0.587173100871731,
+      "valid_accuracy_std": 0.0,
+      "n_seeds": 1
+    }
+  ]
+}
