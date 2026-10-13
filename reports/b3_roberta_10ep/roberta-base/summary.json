@@ -1,0 +1,34 @@
+{
+  "baseline": "b3_finetune",
+  "model_name": "roberta-base",
+  "seeds": [
+    4012,
+    4013,
+    4014
+  ],
+  "failed_seeds": [],
+  "valid_accuracy_mean": 0.7090078870900788,
+  "valid_accuracy_std": 0.00768514262414842,
+  "test_accuracy_mean": 0.704570184983678,
+  "test_accuracy_std": 0.005358464527636619,
+  "runs": [
+    {
+      "seed": 4012,
+      "best_epoch": 10,
+      "valid_accuracy": 0.7154420921544209,
+      "test_accuracy": 0.7029379760609358
+    },
+    {
+      "seed": 4013,
+      "best_epoch": 7,
+      "valid_accuracy": 0.7004981320049813,
+      "test_accuracy": 0.7002176278563657
+    },
+    {
+      "seed": 4014,
+      "best_epoch": 7,
+      "valid_accuracy": 0.7110834371108343,
+      "test_accuracy": 0.7105549510337323
+    }
+  ]
+}
