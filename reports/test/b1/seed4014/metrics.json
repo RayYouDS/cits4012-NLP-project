@@ -1,0 +1,23 @@
+{
+  "model_name": "lstm",
+  "checkpoint": "reports/baselines/b1_lstm_noattn/m3_lstm_lr0.0009_seed4014_best.pt",
+  "split": "test",
+  "include_goal": true,
+  "n_params": 1082401,
+  "selection": null,
+  "metrics": {
+    "loss": 1.3439032852455115,
+    "accuracy": 0.5832426550598476,
+    "precision": 0.5832480818414323,
+    "recall": 0.5832559681697613,
+    "f1": 0.5832347595450804
+  },
+  "n": 1838,
+  "seconds": 1.481,
+  "versions": {
+    "python": "3.13.16",
+    "torch": "2.14.1+cpu",
+    "numpy": "2.5.4",
+    "pandas": "3.0.6"
+  }
+}

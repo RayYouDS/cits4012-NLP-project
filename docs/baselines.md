@@ -30,13 +30,18 @@ python -m scripts.baselines.b0_trivial
 
 不新写模型。`RNNWithAttention` 在 `enable_attention=false` 时用最后一层的隐状态，`forward` 返回的 weights 是 `[None, None]`。
 
-训练设置都在 `config/b1_lstm_noattn.json`：LSTM、AdamW（`weight_decay` 0.01）、学习率 0.001、batch 512、最多 150 轮、patience 30、种子 4012 / 4013 / 4014。要改协议就改这个文件。
+训练设置在 `config/b1_lstm_noattn.json`，用的是 E2 定稿协议：LSTM、AdamW（`weight_decay` 0.01）、学习率 9e-4、dropout 0.3、batch 512、300 轮、不早停（`patience` 为 null）、种子 4012 / 4013 / 4014。跑满 300 轮，验证准确率最高的一轮载回。
 
 ```bash
 python -m scripts.training.run_m3 --config config/b1_lstm_noattn.json
 ```
 
-`run_m3.py` 不使用测试集。三个种子跑完之后，每个 `best.pt` 再用下面的评估脚本在测试集上各评一次。输出在 `reports/baselines/b1_lstm_noattn/`。
+`run_m3.py` 不使用测试集。三个种子的验证结果在 `reports/baselines/b1_lstm_noattn/`：
+
+- `m3_lstm_lr0.0009_seed4012_best.pt`、`m3_lstm_lr0.0009_seed4012_history.csv`、`m3_lstm_lr0.0009_seed4012_val_predictions.csv`，4013 和 4014 同样命名
+- `m3_summary.csv`、`m3_selection.json`、`m3_model_table.csv`、`m3_curves.png`
+
+训练日志在 `reports/baselines/lstm_noattn.ipynb`。测试集用下面的评估脚本，checkpoint 用这些 `best.pt`，每个种子评一次。
 
 # B2 零样本语言模型
 
@@ -64,7 +69,7 @@ python -m scripts.baselines.b2_zero_shot_lm \
     --batch-size 8
 ```
 
-输出在 `reports/baselines/b2_zero_shot_lm/<模型名>/`。`valid_sum_predictions.csv` 和 `valid_mean_predictions.csv` 是两种分数；`valid_predictions.csv` 和 `test_predictions.csv` 是选定的那种。`metrics.json` 里有两种验证集结果和最终选择。
+完整结果在 `reports/baselines/b2_zero_shot_lm/gpt2/` 和 `reports/baselines/b2_zero_shot_lm/qwen2.5-0.5b/`。每个目录有 `valid_sum_predictions.csv`、`valid_mean_predictions.csv`、`valid_predictions.csv`、`test_predictions.csv`、`metrics.json`。前两个是两种分数；后两个预测表是验证集上选定的那种。两个模型选定的都是 mean。Colab 日志在 `reports/baselines/colab_b2_b3.ipynb`。
 
 GPT-2 约 1.24 亿参数，Qwen2.5-0.5B 约 5 亿，我们的模型约 100 万。差的是训练方式。两个模型的预训练数据都可能见过 PIQA。
 
@@ -74,12 +79,14 @@ GPT-2 约 1.24 亿参数，Qwen2.5-0.5B 约 5 亿，我们的模型约 100 万�
 
 ```bash
 python -m scripts.evaluation.evaluate_checkpoint \
-    --config config/m3_params.json \
-    --model transformer \
-    --checkpoint path/to/best.pt \
+    --config config/b1_lstm_noattn.json \
+    --model lstm \
+    --checkpoint reports/baselines/b1_lstm_noattn/m3_lstm_lr0.0009_seed4012_best.pt \
     --split test \
-    --output-dir reports/eval/run_name
+    --output-dir reports/test/b1/seed4012
 ```
+
+4013、4014 换成对应的 `best.pt`。每个种子用不同的 `--output-dir`，脚本在里面写 `test_predictions.csv` 和 `metrics.json`。主模型和消融用同一个脚本，把 `--config`、`--model`、`--checkpoint` 换成那次运行的文件。
 
 `--split` 是 `valid` 或 `test`。`--no-include-goal` 只用于 A2-a：评估已经训练好的模型时去掉 goal，输入是 `[CLS] [SEP] 方案 [EOS]`。A2-b 是不带 goal 从头训练，训练输入是 `[CLS] 方案 [EOS]`，格式不同，不能用这个参数评估。默认保留 goal。
 
@@ -100,6 +107,16 @@ python -m scripts.baselines.b3_finetune \
     --epochs 3 --lr 2e-5 --batch-size 16 --max-length 128
 ```
 
-输出在 `reports/baselines/b3_finetune/<模型名>/seed<seed>/`：`history.csv`、`valid_predictions.csv`、`test_predictions.csv`、`metrics.json`。每个模型目录还有 `summary.json`（均值 ± 标准差）。不保存模型权重。`metrics.json` 里有句对超过 128 的截断比例。
+DistilBERT 按 3 轮、学习率 2e-5 跑完。结果在 `reports/baselines/b3_finetune/distilbert-base-uncased/`，下面是 `seed4012/`、`seed4013/`、`seed4014/`。每个种子目录有 `history.csv`、`valid_predictions.csv`、`test_predictions.csv`、`metrics.json`，模型目录有 `summary.json`。不保存模型权重。`metrics.json` 里有句对超过 128 的截断比例。同一次 Colab 日志在 `reports/baselines/colab_b2_b3.ipynb`。
+
+RoBERTa 第一次用同样的 3 轮、学习率 2e-5。三个种子的训练 loss 都停在 ln 2 附近（约 0.693，二选一随机猜测的交叉熵），模型没有学起来。这次输出留在 `reports/baselines/b3_finetune/roberta-base/`。之后改成 10 轮、学习率 1e-5 重跑三个种子，batch、最大长度和 warmup 不变。重跑结果在 `reports/baselines/b3_roberta_10ep/roberta-base/`，同样是 `seed4012/`、`seed4013/`、`seed4014/` 和 `summary.json`。日志在 `reports/baselines/b3_roberta_10ep/roberta.ipynb`。报告里的 RoBERTa 用这一次。
+
+```bash
+python -m scripts.baselines.b3_finetune \
+    --models roberta-base \
+    --seeds 4012 4013 4014 \
+    --epochs 10 --lr 1e-5 --batch-size 16 --max-length 128 \
+    --output-dir reports/baselines/b3_roberta_10ep
+```
 
 DistilBERT 约 6600 万参数，RoBERTa-base 约 1.25 亿，大约是我们模型的 60 到 125 倍，而且经过预训练。预训练语料可能包含 PIQA 相关的文本。
