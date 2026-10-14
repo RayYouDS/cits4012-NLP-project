@@ -1,0 +1,7 @@
+row_id,类别,goal,sol1,sol2,正确答案,预测,prob_sol2
+1562,把握最大且做对,What is an easy way to keep a room dark during the day?,Purchase blackout curtains with liners.,Paint your windows with white paint.,sol1,sol1,4.186396472505294e-05
+165,把握最大且做对,"To report a stolen vehicle to the police,",call the police's emergency phone number and ask for help.,call the police's non-emergency line and report it there.,sol2,sol2,0.9998984336853027
+106,把握最大但做错,handkerchief,washed the grease off the pan surface,played checkers with pan at the casino,sol1,sol2,0.9999855756759644
+1135,把握最大但做错,measuring cup,can be set on baby wipe,can be set on stool,sol2,sol1,5.226991561357863e-05
+1142,最小差异且做对,lid,can be put on bathtub,can be put on Tupperware,sol2,sol2,0.9998598098754883
+1296,最小差异但做错,"To add detail in paint without a brush, you can",Use a tablespoon,Use a toothpick,sol2,sol1,0.00030097481794655323
