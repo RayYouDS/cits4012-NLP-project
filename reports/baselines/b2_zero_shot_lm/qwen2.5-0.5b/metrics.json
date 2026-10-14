@@ -1,0 +1,47 @@
+{
+  "baseline": "b2_zero_shot_lm",
+  "model_name": "Qwen/Qwen2.5-0.5B",
+  "n_params": 494032768,
+  "selection": {
+    "split": "valid",
+    "chosen_score": "mean",
+    "tie_break": "mean",
+    "valid_sum_accuracy": 0.701120797011208,
+    "valid_mean_accuracy": 0.7198007471980075
+  },
+  "valid": {
+    "sum": {
+      "accuracy": 0.701120797011208,
+      "precision": 0.7018756754817852,
+      "recall": 0.700768520888103,
+      "f1": 0.7005840103285466,
+      "n": 1606
+    },
+    "mean": {
+      "accuracy": 0.7198007471980075,
+      "precision": 0.7201424472626332,
+      "recall": 0.7195619973788087,
+      "f1": 0.7195288923661562,
+      "n": 1606
+    }
+  },
+  "test": {
+    "accuracy": 0.6953210010881393,
+    "precision": 0.6954076074084601,
+    "recall": 0.6953983516483517,
+    "f1": 0.6953206403334281,
+    "n": 1838
+  },
+  "limit": null,
+  "device": "cuda",
+  "dtype": "float32",
+  "seconds": 230.26,
+  "note": "模型比从零训练的模型大约 100 到 500 倍。预训练数据可能包含 PIQA。",
+  "versions": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu130",
+    "numpy": "2.1.3",
+    "pandas": "2.2.3",
+    "transformers": "5.18.0"
+  }
+}

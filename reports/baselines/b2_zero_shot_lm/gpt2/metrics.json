@@ -1,0 +1,47 @@
+{
+  "baseline": "b2_zero_shot_lm",
+  "model_name": "openai-community/gpt2",
+  "n_params": 124439808,
+  "selection": {
+    "split": "valid",
+    "chosen_score": "mean",
+    "tie_break": "mean",
+    "valid_sum_accuracy": 0.6264009962640099,
+    "valid_mean_accuracy": 0.6407222914072229
+  },
+  "valid": {
+    "sum": {
+      "accuracy": 0.6264009962640099,
+      "precision": 0.6264484390664709,
+      "recall": 0.6261777912197846,
+      "f1": 0.6260942447383125,
+      "n": 1606
+    },
+    "mean": {
+      "accuracy": 0.6407222914072229,
+      "precision": 0.640835105919817,
+      "recall": 0.6404818959433574,
+      "f1": 0.6403875296633272,
+      "n": 1606
+    }
+  },
+  "test": {
+    "accuracy": 0.6147986942328618,
+    "precision": 0.6148641588296762,
+    "recall": 0.6145485979537704,
+    "f1": 0.6144147347461243,
+    "n": 1838
+  },
+  "limit": null,
+  "device": "cuda",
+  "dtype": "float32",
+  "seconds": 67.472,
+  "note": "模型比从零训练的模型大约 100 到 500 倍。预训练数据可能包含 PIQA。",
+  "versions": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu130",
+    "numpy": "2.1.3",
+    "pandas": "2.2.3",
+    "transformers": "5.18.0"
+  }
+}

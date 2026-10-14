@@ -1,0 +1,34 @@
+{
+  "baseline": "b3_finetune",
+  "model_name": "distilbert-base-uncased",
+  "seeds": [
+    4012,
+    4013,
+    4014
+  ],
+  "failed_seeds": [],
+  "valid_accuracy_mean": 0.6168534661685346,
+  "valid_accuracy_std": 0.0020015879537137802,
+  "test_accuracy_mean": 0.622234312658687,
+  "test_accuracy_std": 0.008434541860162157,
+  "runs": [
+    {
+      "seed": 4012,
+      "best_epoch": 3,
+      "valid_accuracy": 0.6145703611457036,
+      "test_accuracy": 0.6284004352557128
+    },
+    {
+      "seed": 4013,
+      "best_epoch": 2,
+      "valid_accuracy": 0.6176836861768369,
+      "test_accuracy": 0.6256800870511425
+    },
+    {
+      "seed": 4014,
+      "best_epoch": 3,
+      "valid_accuracy": 0.6183063511830635,
+      "test_accuracy": 0.6126224156692056
+    }
+  ]
+}
