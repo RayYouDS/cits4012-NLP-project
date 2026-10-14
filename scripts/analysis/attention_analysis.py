@@ -18,6 +18,8 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.font_manager import FontProperties
+from matplotlib.patches import Rectangle
 import numpy as np
 import pandas as pd
 import sentencepiece as spm
@@ -695,6 +697,306 @@ def plot_examples(examples, path):
     save_figure(fig, path, tight=False)
 
 
+def content_pieces(candidate):
+    """去掉特殊符号。这些位置不画，也不进入色标。goal 和方案之间放一条竖线。"""
+    sep = candidate["sep_index"]
+    goal, solution = [], []
+    for index, (token, weight) in enumerate(zip(candidate["tokens"], candidate["rollout"])):
+        if index == 0 or index == sep or token in {"[CLS]", "[SEP]", "[EOS]"}:
+            continue
+        piece = {
+            "kind": "token",
+            "text": token if token else "□",
+            "value": float(weight),
+            "diff": index in candidate["diff_positions"],
+        }
+        if index < sep:
+            goal.append(piece)
+        else:
+            solution.append(piece)
+    return goal + [{"kind": "bar", "text": "|", "value": 0.0, "diff": False}] + solution
+
+
+def glyph_width(renderer, text, fontsize):
+    font = FontProperties(family="DejaVu Sans", size=fontsize)
+    width_px, _, _ = renderer.get_text_width_height_descent(text, font, ismath=False)
+    return width_px / renderer.dpi
+
+
+def text_on_blues(value, vmax):
+    rgba = plt.cm.Blues(0.0 if vmax <= 0 else value / vmax)
+    luminance = 0.2126 * rgba[0] + 0.7152 * rgba[1] + 0.0722 * rgba[2]
+    return rgba, ("white" if luminance < 0.45 else "black")
+
+
+def pack_highlight_line(pieces, widths, x0, x_max, gap):
+    """按宽度换行。竖线不单独留在行尾，跟着后面的子词走。"""
+    lines, current, x = [], [], x0
+    index = 0
+    while index < len(pieces):
+        piece = pieces[index]
+        width = widths[index]
+        take = 1
+        extra = 0.0
+        if piece["kind"] == "bar" and index + 1 < len(pieces):
+            extra = gap + widths[index + 1]
+            take = 2
+        needed = width + extra
+        if current and x + needed > x_max:
+            lines.append(current)
+            current = []
+            x = x0
+        for step in range(take):
+            current.append((pieces[index + step], x, widths[index + step]))
+            x += widths[index + step] + gap
+        index += take
+    if current:
+        lines.append(current)
+    return lines
+
+
+def draw_highlight_line(axis, placed, y, box_h, fontsize, vmax):
+    for piece, x, width in placed:
+        if piece["kind"] == "bar":
+            axis.text(
+                x + width / 2, y, "|",
+                ha="center", va="center", fontsize=fontsize, color="black",
+                fontfamily="DejaVu Sans", clip_on=False,
+            )
+            continue
+        rgba, ink = text_on_blues(piece["value"], vmax)
+        axis.add_patch(Rectangle(
+            (x, y - box_h / 2), width, box_h,
+            facecolor=rgba, edgecolor="none", linewidth=0, clip_on=False,
+        ))
+        axis.text(
+            x + width / 2, y, piece["text"],
+            ha="center", va="center", fontsize=fontsize, color=ink,
+            fontfamily="DejaVu Sans", clip_on=False,
+        )
+        if piece["diff"]:
+            underline_y = y - box_h / 2 + 0.012
+            axis.plot(
+                [x + 0.008, x + width - 0.008],
+                [underline_y, underline_y],
+                color=ink, linewidth=0.8, solid_capstyle="butt", clip_on=False,
+            )
+
+
+def draw_scale(fig, axis, x, y, bar_w, vmax, fig_w, fig_h):
+    """横条色标，两端标 0 和本题最大值。"""
+    left_label = "0"
+    right_label = f"{vmax:.2f}"
+    # 标签宽度在主坐标里另留，这里 x 是色条左端。
+    bar_h = 0.07
+    color_axis = fig.add_axes([
+        x / fig_w,
+        (y - bar_h / 2) / fig_h,
+        bar_w / fig_w,
+        bar_h / fig_h,
+    ])
+    color_axis.imshow(
+        np.linspace(0, 1, 256).reshape(1, -1),
+        aspect="auto", cmap="Blues", vmin=0, vmax=1, interpolation="nearest",
+    )
+    color_axis.set_xlim(-0.5, 255.5)
+    color_axis.set_xticks([])
+    color_axis.set_yticks([])
+    for spine in color_axis.spines.values():
+        spine.set_linewidth(0.4)
+        spine.set_color("#4d4d4d")
+    axis.text(x - 0.03, y, left_label, ha="right", va="center", fontsize=7, color="black", clip_on=False)
+    axis.text(x + bar_w + 0.03, y, right_label, ha="left", va="center", fontsize=7, color="black", clip_on=False)
+
+
+def wrap_words(renderer, text, fontsize, max_width):
+    lines, current = [], ""
+    for word in text.split():
+        trial = word if not current else current + " " + word
+        if glyph_width(renderer, trial, fontsize) > max_width and current:
+            lines.append(current)
+            current = word
+        else:
+            current = trial
+    if current:
+        lines.append(current)
+    return lines
+
+
+def plot_compact_examples(examples, path, width, max_height):
+    """文字高亮。背景是 rollout，两个候选共用色标。只画内容子词。"""
+    configure_matplotlib()
+    fontsize = 7
+    pad_x = 0.012
+    gap = 0.018
+    box_h = 0.125
+    line_pitch = 0.175
+    item_gap = 0.07
+    margin_x = 0.05
+    margin_top = 0.05
+    scale_w = 0.78
+    scale_side = 0.30
+    caption = (
+        "Color is attention rollout on content tokens, not the last layer. "
+        "[CLS], [SEP], and [EOS] are omitted and excluded from the scale. "
+        "Underlined tokens differ between the two solutions."
+    )
+    # 先量宽度，再按实际行数定高度，保证不超过报告给出的上限。
+    probe = plt.figure(figsize=(width, 2.0))
+    probe.canvas.draw()
+    renderer = probe.canvas.get_renderer()
+    label_w = max(glyph_width(renderer, name, fontsize) for name in ("sol1", "sol2")) + 0.06
+    text_x = margin_x + label_w
+    text_right = width - margin_x
+    scale_left = width - margin_x - scale_side - scale_w
+    plans = []
+    for example in examples:
+        values = []
+        sides = []
+        for candidate in example["plotted"]:
+            pieces = content_pieces(candidate)
+            widths = []
+            for piece in pieces:
+                extra = 0.0 if piece["kind"] == "bar" else 2 * pad_x
+                widths.append(glyph_width(renderer, piece["text"], fontsize) + extra)
+            lines = pack_highlight_line(pieces, widths, text_x, text_right, gap)
+            sides.append({"name": candidate["name"], "lines": lines})
+            values.extend(piece["value"] for piece in pieces if piece["kind"] == "token")
+        mark = "correct" if example["correct"] else "wrong"
+        header = (
+            f"label {side_name(example['label'])} · pred {side_name(example['pred'])} · "
+            f"P(sol2)={format_prob(example['prob_sol2'])} · {mark}"
+        )
+        header_w = glyph_width(renderer, header, fontsize)
+        scale_inline = scale_left - 0.22 > margin_x + header_w + 0.08
+        plans.append({
+            "example": example,
+            "sides": sides,
+            "vmax": max(max(values, default=0.0), 1e-3),
+            "header": header,
+            "scale_inline": scale_inline,
+        })
+    caption_lines = wrap_words(renderer, caption, fontsize, width - 2 * margin_x)
+    plt.close(probe)
+
+    caption_h = 0.13 * len(caption_lines) + 0.08
+    body = 0.0
+    for plan in plans:
+        body += 0.16
+        if not plan["scale_inline"]:
+            body += 0.18
+        body += 0.08
+        for side in plan["sides"]:
+            body += line_pitch * max(len(side["lines"]), 1)
+        body += item_gap
+    height = margin_top + body + caption_h
+    if max_height is not None and height > max_height:
+        raise RuntimeError(f"压缩图高度 {height:.2f} 英寸，超过 {max_height:.2f}")
+
+    fig = plt.figure(figsize=(width, height))
+    axis = fig.add_axes([0, 0, 1, 1])
+    axis.set_xlim(0, width)
+    axis.set_ylim(0, height)
+    axis.axis("off")
+    cursor = height - margin_top
+    for plan in plans:
+        cursor -= 0.12
+        axis.text(
+            margin_x, cursor, plan["header"],
+            ha="left", va="center", fontsize=fontsize, color="black",
+            fontfamily="DejaVu Sans", clip_on=False,
+        )
+        if plan["scale_inline"]:
+            draw_scale(fig, axis, scale_left, cursor, scale_w, plan["vmax"], width, height)
+            cursor -= 0.12
+        else:
+            cursor -= 0.18
+            draw_scale(fig, axis, scale_left, cursor, scale_w, plan["vmax"], width, height)
+            cursor -= 0.12
+        for side in plan["sides"]:
+            for line_index, placed in enumerate(side["lines"]):
+                cursor -= line_pitch
+                if line_index == 0:
+                    axis.text(
+                        margin_x, cursor, side["name"],
+                        ha="left", va="center", fontsize=fontsize, color="black",
+                        fontfamily="DejaVu Sans", clip_on=False,
+                    )
+                draw_highlight_line(axis, placed, cursor, box_h, fontsize, plan["vmax"])
+        cursor -= item_gap
+    caption_y = 0.03
+    for line in reversed(caption_lines):
+        axis.text(
+            margin_x, caption_y, line,
+            ha="left", va="bottom", fontsize=fontsize, color="black",
+            fontfamily="DejaVu Sans", clip_on=False,
+        )
+        caption_y += 0.13
+    save_figure(fig, path, tight=False)
+
+
+def plot_summary_compact(shares, errors, path):
+    """单栏图 B：占比和准确率上下排，总高 3.2 英寸。"""
+    configure_matplotlib()
+    plt.rcParams.update({
+        "font.size": 7,
+        "axes.titlesize": 7,
+        "axes.labelsize": 7,
+        "xtick.labelsize": 7,
+        "ytick.labelsize": 7,
+        "legend.fontsize": 7,
+    })
+    fig, axes = plt.subplots(2, 1, figsize=(3.0, 3.2))
+    regions = ["goal", "solution", "special"]
+    rollout, last, tokens = [], [], []
+    rollout_err, last_err, token_err = [], [], []
+    for region in regions:
+        roll_values = shares[(shares["source"] == "rollout") & (shares["region"] == region)]["attention_mean"]
+        last_values = shares[(shares["source"] == "last") & (shares["region"] == region)]["attention_mean"]
+        token_values = shares[(shares["source"] == "rollout") & (shares["region"] == region)]["token_mean"]
+        rollout.append(roll_values.mean())
+        last.append(last_values.mean())
+        tokens.append(token_values.mean())
+        rollout_err.append(roll_values.std(ddof=1))
+        last_err.append(last_values.std(ddof=1))
+        token_err.append(token_values.std(ddof=1))
+    x = np.arange(len(regions))
+    bar_w = 0.24
+    axes[0].bar(x - bar_w, tokens, bar_w, yerr=token_err, label="token share", color="#bdbdbd", capsize=1.5, error_kw={"elinewidth": 0.6})
+    axes[0].bar(x, rollout, bar_w, yerr=rollout_err, label="rollout", color="#2c7fb8", capsize=1.5, error_kw={"elinewidth": 0.6})
+    axes[0].bar(x + bar_w, last, bar_w, yerr=last_err, label="last layer", color="#7fcdbb", capsize=1.5, error_kw={"elinewidth": 0.6})
+    axes[0].set_xticks(x, regions)
+    axes[0].set_ylim(0, 1.05)
+    axes[0].set_yticks([0, 0.5, 1])
+    axes[0].set_ylabel("share")
+    axes[0].set_title("Where [CLS] attends", pad=2)
+    # 最高的柱子大约 0.75，图例放在坐标轴内部上方，避免和标题叠在一起。
+    axes[0].legend(
+        frameon=False, ncol=3, fontsize=7, loc="upper center",
+        borderaxespad=0.05,
+        handlelength=0.9, columnspacing=0.7, handletextpad=0.3,
+    )
+    axes[0].tick_params(length=2, pad=1)
+
+    diff_rows = errors[errors["grouping"] == "n_diff"]
+    bins = ["1", "2", "3-5", ">5"]
+    means, stds = [], []
+    for label in bins:
+        values = diff_rows[diff_rows["bin"] == label]["accuracy"]
+        means.append(values.mean())
+        stds.append(values.std(ddof=1))
+    axes[1].bar(bins, means, yerr=stds, color="#2c7fb8", capsize=1.5, error_kw={"elinewidth": 0.6})
+    axes[1].axhline(0.5, color="#737373", linewidth=0.6, linestyle="--")
+    axes[1].set_ylim(0.45, 0.72)
+    axes[1].set_yticks([0.5, 0.6, 0.7])
+    axes[1].set_xlabel("word-level edit distance")
+    axes[1].set_ylabel("accuracy")
+    axes[1].set_title("Accuracy by solution difference", pad=2)
+    axes[1].tick_params(length=2, pad=1)
+    fig.subplots_adjust(left=0.20, right=0.98, top=0.86, bottom=0.14, hspace=0.72)
+    save_figure(fig, path, tight=False)
+
+
 def plot_heads(example, path):
     configure_matplotlib()
     fig, axes = plt.subplots(1, 2, figsize=(6.3, 3.4), squeeze=False)
@@ -1071,9 +1373,12 @@ def write_summary(path, verifies, shares, diffs, errors, examples, interventions
         "",
         "## 图",
         "",
-        "- `figA_examples`：报告用。把握最大的做对、做错各 1 题，加上最小差异对的做对和做错。",
+        "- `figA_examples`：把握最大的做对、做错各 1 题，加上最小差异对的做对和做错。热图，较高。",
         "- `figA_examples_all6`：上面的规则选出的全部 6 题。",
-        "- `figB_share_and_accuracy`：报告用。区域占比，以及准确率随词级距离的变化。",
+        "- `figA_examples_compact`：报告用，双栏 6.3 英寸。同样 4 题，文字高亮，只画 rollout。",
+        "- `figA_examples_single_compact`：单栏 3.0 英寸。只放 row 1142 和 1296。",
+        "- `figB_share_and_accuracy`：区域占比，以及准确率随词级距离的变化。双栏。",
+        "- `figB_share_and_accuracy_compact`：报告用，单栏 3.0 英寸，两个小图上下排。",
         "- `fig_heads_last_layer`：附图。把握最大且做对的那一题，最后一层 4 个头。",
         "",
     ])
@@ -1155,6 +1460,17 @@ def main():
     plot_examples(selected, out / "figA_examples_all6")
     plot_summary(shares, errors, out / "figB_share_and_accuracy")
     plot_heads(selected[0], out / "fig_heads_last_layer")
+    by_id = {example["row_id"]: example for example in selected}
+    plot_compact_examples(
+        report_examples, out / "figA_examples_compact", width=6.3, max_height=3.5,
+    )
+    plot_compact_examples(
+        [by_id[1142], by_id[1296]],
+        out / "figA_examples_single_compact",
+        width=3.0,
+        max_height=None,
+    )
+    plot_summary_compact(shares, errors, out / "figB_share_and_accuracy_compact")
 
     interventions = []
     for seed in args.seeds:

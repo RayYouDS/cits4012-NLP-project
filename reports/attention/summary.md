@@ -107,7 +107,10 @@ goal 在两种算法里都低于自己的长度占比。这和 A2-a 里大约 15
 
 ## 图
 
-- `figA_examples`：报告用。把握最大的做对、做错各 1 题，加上最小差异对的做对和做错。
+- `figA_examples`：把握最大的做对、做错各 1 题，加上最小差异对的做对和做错。热图，较高。
 - `figA_examples_all6`：上面的规则选出的全部 6 题。
-- `figB_share_and_accuracy`：报告用。区域占比，以及准确率随词级距离的变化。
+- `figA_examples_compact`：报告用，双栏 6.3 英寸。同样 4 题，文字高亮，只画 rollout。
+- `figA_examples_single_compact`：单栏 3.0 英寸。只放 row 1142 和 1296。
+- `figB_share_and_accuracy`：区域占比，以及准确率随词级距离的变化。双栏。
+- `figB_share_and_accuracy_compact`：报告用，单栏 3.0 英寸，两个小图上下排。
 - `fig_heads_last_layer`：附图。把握最大且做对的那一题，最后一层 4 个头。
