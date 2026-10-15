@@ -1,0 +1,7 @@
+# 1 Introduction
+
+Physical commonsense reasoning is an important challenge in natural language processing (NLP), requiring models to reason about everyday physical interactions rather than relying solely on linguistic patterns. Bisk et al. introduced the Physical Interaction: Question Answering (PIQA) benchmark to evaluate this capability [1]. Given a goal and two candidate solutions, a model must select the solution that is more physically plausible. The task is challenging because plausible solutions often depend on implicit knowledge of objects, materials, and physical interactions that may not be explicitly described in text.
+
+This project develops and evaluates neural models for PIQA, formulated as a binary classification problem. We compare attention-based bidirectional LSTM (BiLSTM) and bidirectional GRU (BiGRU) models with a Transformer-based model, and investigate the contribution of attention mechanisms to classification performance. Using a consistent evaluation pipeline, we assess classification accuracy and observed training behaviour to compare these architectures.
+
+Our results show that [experimental findings]. Further experiments indicate that [key findings], highlighting [main implication]. These findings provide an empirical comparison of neural approaches to physical commonsense question answering and illustrate the challenges of learning physical knowledge from language data.
