@@ -1,0 +1,23 @@
+{
+  "model_name": "transformer",
+  "checkpoint": "/content/drive/MyDrive/cits4012/e2_full_300/final_3seed/m3_transformer_lr0.0009_seed4012_best.pt",
+  "split": "valid",
+  "include_goal": false,
+  "n_params": 933357,
+  "selection": null,
+  "metrics": {
+    "loss": 0.9450490008552522,
+    "accuracy": 0.5759651307596513,
+    "precision": 0.5759111384111384,
+    "recall": 0.5759044273317357,
+    "f1": 0.5759057728660755
+  },
+  "n": 1606,
+  "seconds": 2.359,
+  "versions": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu130",
+    "numpy": "2.1.3",
+    "pandas": "2.2.3"
+  }
+}

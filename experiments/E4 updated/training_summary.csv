@@ -1,0 +1,5 @@
+run,valid_acc_mean,valid_acc_sd,best_epoch_mean,gap_at_best_mean,gap_at_end_mean,valid_loss_at_end_mean
+main,0.594,0.0081,185.3333,0.2748,0.3474,1.0513
+a1_no_position,0.5969,0.005,183.3333,0.2644,0.3447,0.9469
+a1_one_head,0.5863,0.0016,186.6667,0.2217,0.2798,0.9151
+a3_no_dropout,0.5627,0.0121,10.6667,0.2549,0.4585,6.8791
