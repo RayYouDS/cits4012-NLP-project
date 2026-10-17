@@ -1,0 +1,2 @@
+model,learning_rate,valid_accuracy_mean,valid_accuracy_std,n_seeds
+transformer,0.0009,0.5940224159402242,0.008142401513463229,3

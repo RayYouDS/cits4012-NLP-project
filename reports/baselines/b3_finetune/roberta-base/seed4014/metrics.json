@@ -1,0 +1,66 @@
+{
+  "baseline": "b3_finetune",
+  "model_name": "roberta-base",
+  "seed": 4014,
+  "n_params": 124646401,
+  "best_epoch": 3,
+  "selection": {
+    "split": "valid",
+    "metric": "accuracy",
+    "best_epoch": 3
+  },
+  "valid": {
+    "accuracy": 0.6251556662515566,
+    "precision": 0.6251130354935328,
+    "recall": 0.6251060496785551,
+    "f1": 0.6251085729175714,
+    "loss": 0.6530613571145615,
+    "n": 1606
+  },
+  "test": {
+    "accuracy": 0.6044613710554951,
+    "precision": 0.6045270296674446,
+    "recall": 0.6045246779082987,
+    "f1": 0.6044612539713691,
+    "loss": 0.6667675759250113,
+    "n": 1838
+  },
+  "truncation": {
+    "max_length": 128,
+    "train": {
+      "n_choices": 29014,
+      "n_truncated": 268,
+      "rate": 0.009236920107534293
+    },
+    "valid": {
+      "n_choices": 3212,
+      "n_truncated": 25,
+      "rate": 0.007783312577833126
+    },
+    "test": {
+      "n_choices": 3676,
+      "n_truncated": 25,
+      "rate": 0.006800870511425462
+    }
+  },
+  "epochs": 3,
+  "learning_rate": 2e-05,
+  "weight_decay": 0.01,
+  "batch_size": 16,
+  "max_length": 128,
+  "grad_clip": 1.0,
+  "warmup_steps": 272,
+  "total_steps": 2721,
+  "train_amp": "fp16",
+  "eval_dtype": "float32",
+  "n_train": 14507,
+  "seconds": 580.94,
+  "note": "模型比从零训练的模型大约大 60 到 125 倍，并且经过预训练。预训练语料可能包含 PIQA。",
+  "versions": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu130",
+    "numpy": "2.1.3",
+    "pandas": "2.2.3",
+    "transformers": "5.18.0"
+  }
+}

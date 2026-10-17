@@ -1,0 +1,23 @@
+{
+  "model_name": "transformer",
+  "checkpoint": "experiments/E2/checkpoints/m3_transformer_lr0.0009_seed4012_best.pt",
+  "split": "test",
+  "include_goal": true,
+  "n_params": 933357,
+  "selection": null,
+  "metrics": {
+    "loss": 0.8484511681557739,
+    "accuracy": 0.5914036996735582,
+    "precision": 0.5914678120126329,
+    "recall": 0.5914657540735127,
+    "f1": 0.5914035787242067
+  },
+  "n": 1838,
+  "seconds": 4.486,
+  "versions": {
+    "python": "3.13.16",
+    "torch": "2.14.1+cpu",
+    "numpy": "2.5.4",
+    "pandas": "3.0.6"
+  }
+}
