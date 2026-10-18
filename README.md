@@ -1,108 +1,74 @@
-# Latest Update
+# PIQA Commonsense Reasoning
 
-- Dataset 实验报告 [Dataset Inspection Report](reports/2026-09-19_dataset_inspection_report.md)
-- [Tokenizer APi Reference](docs/tokenizer.md)
-- [Get Data Loader API Reference](docs/get_data_loader.md)
-- [Transformer Model API Document](docs/transformer_bi_classifier.md)
-- [RNN with Transformer Model API Document](docs/rnn_attention.md)
+A PyTorch project investigating physical commonsense reasoning on the PIQA dataset. This repository contains data preprocessing, model training, baseline evaluation, ablation experiments, and attention analysis.
 
-# Assignment 简述
+For detailed methodology, results, figures, and discussion, see [`Report`](./reports/CITS4012_67.pdf).
 
-- Due: 2026-10-18 23:59
+For runnable demonstration, see ['Notebook'](CITS4012_67.ipynb).
 
-- 任务目标：设计、训练 QA 模型
+## Methodology
 
-- 架构：RNN/LSTM/GRU/Transformer, 必须含有注意力机制
+### Data Pipeline
 
-- 定量分析：Precision, Recall, Accuracy, F1-Score, etc.
+- Dataset: PIQA, with goal-level training/validation splitting.
+- Preprocessing: Unicode NFKC normalisation and whitespace standardisation.
+- Tokenisation: SentencePiece BPE with an 8,000-token vocabulary.
+- Input format: `[CLS] goal [SEP] solution [EOS]`.
+- Efficiency: length-bucketed batching, Boolean padding masks, and optional GPU data preloading.
+- Split sizes: 14,507 training, 1,606 validation, and 1,838 test examples.
 
-- 消融实验 (Controlled Ablation Experiment)：检查模型的组件对模型表现是否有帮助
+### Main Model
 
-- 定性分析：注意力热图 (heat map, etc) 等
+A Transformer encoder trained from scratch to score two candidate solutions using shared parameters and cross-entropy loss.
 
-- 基准实验：Random guess, Pretrained Checkpoints, etc
+The final configuration uses AdamW, a learning rate of $9\times10^{-4}$, dropout of 0.3, two encoder layers, four attention heads, an embedding dimension of 100, and a batch size of 512. Models are trained for 300 epochs, retaining the checkpoint with the highest validation accuracy.
 
-# 里程碑
+Three random seeds are used: `4012`, `4013`, and `4014`.
 
-| No  | Target | Content | DDL |
-| --- | --- | --- | --- |
-| M0  | Specifications  | 协作规范、数据集选择等 |-|
-| M1  | Data Pipeline  | Raw data -> Dataloader, incl.<br>- Preprocessing<br>- Tokenizer |2026-09-27|
-| M2  | Minimum Model  | 设计一个可以跑通的最小模型   |-|
-| M3  | Model Selection  | 选择一个模表现最好的模型作为主模型   |2026-10-04|
-| M4  | Main Exp. and baseline | 对主模型进行基准测试和hyperparameter grid search  |-|
-| M5  | Fix model architecture and hypermeters | 确定最终模型架构和 Hyperparameters，并冻结主要实验设置 |-|
-| M6  | Ablation and Qualitative Analysis      | 消融实验：移除注意力、candidate comparison/gate 等，验证模型组件对模型表现的影响，绘制注意力热力图，给出成功、失败案例  |2026-10-11|
-| M7  | Report and Reproduce  | 撰写报告、引用文献、转写为 Jupyter Notebook、在 Colab 上进行复现测试  |-|
-| M8  | Final Check Metting  | 冻结报告修改，团队成员交叉检查最终提交材料 |2026-10-17|
+### Baselines
 
+| ID | Method | Purpose |
+|---|---|---|
+| B0 | Shorter-solution heuristic | Tests a simple character-length rule |
+| B1 | BiLSTM without attention | Compares recurrent encoding without attention |
+| B2 | Zero-shot GPT-2 and Qwen2.5-0.5B | Evaluates pretrained language-model scoring |
+| B3 | Fine-tuned DistilBERT and RoBERTa-base | Evaluates pretrained encoder representations |
 
-# 协作规范
+### Ablation Experiments
 
-- 模型训练的 Hyperparameters 保存为 JSON 文件到 `config` 目录中
-- 为防止进度阻塞，原则上每个主要功能都应有两人共同参与设计或验证
-- 模块之间统一使用 repo 内的绝对导入；所有上层代码、实验、测试代码从 repo 根目录运行
-  - 例：模块之间使用 repo 内绝对导入 - `train_tokenizer.py`
+Each trained ablation uses the final configuration without hyperparameter retuning.
 
-    ```python
-    from scripts.data_loader.load_piqa_data import piqa_to_dataframe
-    ...
-    ```
-  
-  - 上层代码、实验、测试代码在运行前确保工作目录为 repo 的根目录
-  
-    ```python
-    from pathlib import Path
-    import os
+| ID | Modification | Purpose |
+|---|---|---|
+| A1′-a | Remove positional encoding | Tests the contribution of positional information |
+| A1′-b | Reduce attention heads from four to one | Tests the effect of multi-head attention |
+| A3 | Set dropout to zero | Tests the effect of dropout regularisation |
+| A2-a | Remove the goal at evaluation time | Tests the model's dependence on goal context |
 
-    repo_root = Path.cwd().parents[0]
-    os.chdir(repo_root)
+The three trained ablations use seeds `4012`–`4014` and 300 epochs. A2-a uses the existing final-model checkpoints and does not require retraining. Other proposed ablations were not conducted.
 
-    # print(Path.cwd())  # 检查工作目录
-    ```
+## Experimental Workflow
 
+1. **Preprocess data:** normalise text, tokenise examples, and construct goal-level training/validation splits.
+2. **Establish baselines:** evaluate the heuristic and pretrained-model baselines.
+3. **Tune the main model:** conduct staged validation-based searches over optimiser and learning rate, dropout, and encoder depth.
+4. **Train the final model:** run the selected configuration with three random seeds and retain the best validation checkpoint.
+5. **Run ablations:** change one specified component at a time without retuning.
+6. **Evaluate models:** report accuracy and compare paired predictions using continuity-corrected McNemar tests.
+7. **Analyse attention:** inspect attention distributions, prediction errors, and the effect of removing goal context.
 
-- 涉及随机过程的代码，应设置随机数种子为 **4012**，以最大化保证可复现性
-- 除了局部的对比实验以外，实验代码以 `.py` 脚本文件为主，而不是直接以 Notebook 作为主要开发环境，便于导入模块和版本控制。尤其是对于模型的 Class 架构类，应以将每一个实验 Class 保存为一个 `.py` 文件
-- 对于具有明显架构差异的实验，可以使用具有描述性的文件名，比如 `bigru_attention.py`, `transformer_attention.py`，方便检查迭代轨迹
-- 对于模块的使用说明文档，应集中保存在 `/docs` 目录下
-- 阶段性实验报告以 Markdown 的格式撰写，保存在 `/reports` 目录下，实验报告可以是：
-  - 数据检视和清洗实验
-  - 模型对比实验
-  - 消融实验
-  - 基准测试
-  - 其他值得注意的研究记录
-- 实验过程中生成的图，应保存在 `/reports/figures` 目录下，方便后续 Latex 脚本引用
-- main 分支为通过验证的主要版本，其中的代码应保证可以直接运行，因此除了初始化，禁止直接向 `main` 里 push
-- 新功能、新实验和修复应在独立的 Branch 里完成，测试稳定后提交 PR 加入主代码库。分支可以设置：
-  - data-pipeline
-  - model-and-training
-  - evaluation
-  - ablation
-  - baseline
-  - report (latex 分支)
-  - 其他功能明确的分支
+Validation data are used for model selection; the test set is reserved for final evaluation.
 
-# Standard Workflow
+## Environment and Reproducibility
 
-开始一个新任务时：
+Experiments were conducted in Google Colab with GPU acceleration, using NVIDIA Tesla T4 or A100 GPUs depending on availability.
 
-```bash
-git checkout main
-git pull origin main
+To reproduce the experiments, open ['Notebook'](CITS4012_67.ipynb) in Google Colab, select a GPU runtime, and run the notebook cells in order.
 
-git checkout -b branch_name
-```
+For manual reproduction, ensure that the required dependencies, PIQA dataset, and SentencePiece model are available. Use the specified random seeds and configurations, and verify that saved checkpoints and results correspond to the current code revision.
 
-进行修改后：
+## Further Reading
 
-```bash
-git add .
-git commit -m "commit message"
-git push origin branch_name
-```
+See the project report for the full experimental setup, hyperparameter selection, quantitative comparisons, ablation results, attention visualisations, and limitations.
 
-每个主要功能完成后，应通过 Pull Request 合并到 main。
-
-# References
 
