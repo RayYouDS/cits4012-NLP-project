@@ -31,8 +31,9 @@ class SinusoidalPositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0)
         # [L, D] -> [1, L, D]
 
-        # 把 pe 保存为模型的一部分，但不要把它当成需要梯度更新的 parameter
-        # 同时支持移动到 gpu
+        # Register positional encodings as a buffer rather than a trainable
+        # parameter, so they are included in the model state and move with
+        # the model between devices (e.g., CPU and GPU)
         self.register_buffer("pe", pe)
 
 

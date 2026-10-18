@@ -84,6 +84,13 @@ class PIQASequenceBuilder:
 
 
 class PIQACollator:
+    """
+    Combine individual samples into a batch.
+
+    Build input sequences for both candidate solutions, pad them to
+    the maximum sequence length within each candidate batch, generate
+    padding masks, and convert labels into tensors.
+    """
     def __init__(self, tokenizer, include_goal=True):
 
         self.pad_id = tokenizer.pad_id()
@@ -150,19 +157,21 @@ def get_piqa_dataloaders(base_path:Path,
     '''
     Entrance function for quickly get all required dataloaders
     '''
+    # Load the datasets and tokenise their text columns
     train_dataset, valid_dataset, test_dataset = tokenize_piqa_dataframe(tokenizer=tokenizer, base_path=base_path)
 
+    # Wrap the DataFrames in PyTorch Dataset objects
     train_dataset = PIQADataset(train_dataset)
     valid_dataset = PIQADataset(valid_dataset)
     test_dataset = PIQADataset(test_dataset)
 
-    # 让所有 Dataloader 使用相同的 collator 构造
+    # Use the same collator to construct batches for all three datasets
     collator = PIQACollator(
         tokenizer,
         include_goal=include_goal
     )
 
-    # 根据是否分桶，构造 Train dataloader （验证、测试仍然用旧方法不动它）
+    # Construct the training DataLoader, optionally using length-based bucketing
     if use_bucket:
         train_batch_sampler = BucketBatchSampler(
             dataset=train_dataset,
@@ -179,6 +188,7 @@ def get_piqa_dataloaders(base_path:Path,
         )
         
     else:
+        # Use standard random shuffling without length-based bucketing
         train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
@@ -206,7 +216,10 @@ def get_piqa_dataloaders(base_path:Path,
 
 def preload_dataloader_to_gpu(data_loader, device):
     """
-    一次性把 DataLoader 的数据搬到 GPU 里
+    Preload all DataLoader batches onto the specified device.
+
+    This can reduce repeated data-transfer overhead during training,
+    provided sufficient device memory is available.
     """
 
     gpu_batches = []

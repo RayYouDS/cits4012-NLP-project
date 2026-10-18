@@ -5,17 +5,23 @@ import numpy as np
 import unicodedata
 
 def clean_piqa_text(text: str) -> str:
-    """清洗规则：仅进行规范化（Normalization），压缩多余连续空格，保留绝大部分原始语义、大小写与标点。"""
+    """
+    Clean text using Unicode normalisation and whitespace standardisation.
+
+    This preserves the original casing, punctuation, and most semantic content.
+    """
     if not isinstance(text, str):
         return text
 
-    # 1. 将 \xa0 (NBSP) 等特殊 Unicode 空白转化为标准 ASCII 空格 (\x20)
+    # 1. Convert special Unicode characters, such as non-breaking spaces (NBSP),
+    # into their standard equivalents using NFKC normalisation
     text = unicodedata.normalize("NFKC", text)
 
-    # 2. 替换换行符、制表符等为空格
+    # 2. Replace consecutive whitespace characters, including newlines
+    # and tabs, with a single space
     text = re.sub(r"\s+", " ", text)
     
-    # 3. 去除首尾空格
+    # 3. Remove leading and trailing whitespace
     return text.strip()
 
 
@@ -56,22 +62,26 @@ def piqa_to_dataframe(base_path: Path, sample_prop: float=0.1) -> tuple:
         test_dataset[col] = test_dataset[col].apply(clean_piqa_text)
 
 
-    # ========== Group-Based Splitting (按 Goal 切分规避泄露) ===========
-    # 1. 提取所有不重复的 Goal 列表
+    # ========== Group-Based Train/Validation Split ====================
+    # Split by unique goals to prevent identical goals from appearing
+    # in both the training and validation sets
+
+    # 1. Extract all unique goals
     unique_goals = full_train_df['goal'].unique()
 
-    # 2. 对唯一 Goal 进行固定随机种子的 Shuffle
+    # 2. Shuffle the unique goals using a fixed random seed
     rng = np.random.default_rng(seed=4012)
     rng.shuffle(unique_goals)
 
-    # 3. 按比例切分 Goal 集合（确保同一个 Goal 的所有行严格落在同侧）
+    # 3. Select the specified proportion of unique goals for validation
+    # All rows sharing the same goal will be assigned to the same split
     num_val_goals = int(len(unique_goals) * sample_prop)
     val_goals = set(unique_goals[:num_val_goals])
 
-    # 4. 根据 Goal 映射提取行索引（布尔掩码）
+    # 4. Create a Boolean mask to identify validation rows
     val_mask = full_train_df['goal'].isin(val_goals)
 
-    # 通过布尔掩码划分训练集和测试即
+    # 5. Construct the training and validation DataFrames
     valid_dataset = full_train_df[val_mask].reset_index(drop=True)
     train_dataset = full_train_df[~val_mask].reset_index(drop=True)
 

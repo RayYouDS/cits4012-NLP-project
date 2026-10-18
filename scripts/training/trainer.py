@@ -1,7 +1,9 @@
-"""PIQA 训练循环。
+"""PIQA training loop.
 
-优化器和存盘由调用方负责。损失函数固定为 CrossEntropyLoss。
-train() 只更新传入的模型，验证准确率最好的那一轮参数留在内存里，结束时载回。
+The caller is responsible for the optimizer and checkpointing.
+The loss function is fixed to CrossEntropyLoss.
+train() updates only the supplied model, keeps the parameters from the epoch
+with the best validation accuracy in memory, and restores them before returning.
 """
 
 from __future__ import annotations
@@ -21,10 +23,13 @@ SEED = 4012
 
 
 def set_seed(seed: int = SEED) -> None:
-    """固定 random、numpy、torch、cuda 的种子。在创建模型之前调用。
+    """Set the random seeds for random, NumPy, PyTorch, and CUDA.
 
-    训练集每个 epoch 的 batch 顺序要另外用 DataLoader / BatchSampler 自己的
-    torch.Generator 来固定，由调用方 manual_seed 之后传进去。
+    Call this function before creating the model.
+
+    To make the batch order reproducible across training epochs, the caller
+    must separately initialize a torch.Generator for the DataLoader or
+    BatchSampler, seed it with manual_seed(), and pass it in.
     """
     random.seed(seed)
     np.random.seed(seed)
@@ -33,11 +38,16 @@ def set_seed(seed: int = SEED) -> None:
 
 
 def _logits_of(output):
-    """RNNWithAttention 返回 (logits, weights)，TransformerClassifier 只返回 logits。"""
+    """Extract logits from model output.
+
+    RNNWithAttention returns (logits, weights), whereas
+    TransformerClassifier returns only logits.
+    """
     return output[0] if isinstance(output, (tuple, list)) else output
 
 
 def _to(batch, device):
+    """Move a batch of inputs, masks, and labels to the target device."""
     input_1, input_2, mask_1, mask_2, labels = batch
     return (
         input_1.to(device, non_blocking=True),
@@ -60,14 +70,22 @@ def train(
     train_eval_loader=None,
     verbose=True,
 ):
-    """训练最多 max_epochs 轮，每轮用 evaluate() 看一次验证集。
+    """
+    Train for up to max_epochs epochs and evaluate on the validation set after each epoch.
 
-    损失函数固定为 nn.CrossEntropyLoss()（mean reduction）。loss 先乘 batch 大小，
-    再在整轮末除以题数，和 evaluate() 的「总 loss / 题数」同一口径。
+    The loss function is fixed to nn.CrossEntropyLoss() with mean reduction.
+    The batch loss is multiplied by the batch size and then divided by the
+    total number of examples at the end of the epoch. This uses the same
+    averaging convention as evaluate(), which computes total loss divided
+    by the number of examples.
 
-    patience 传入整数时，验证准确率连续这么多轮没有刷新最好成绩就停止。
-    patience 为 None 时跑满 max_epochs。无论是否早停，返回的 model 都已载入
-    验证准确率最高那一轮的参数。本函数不写任何文件。
+    If patience is an integer, training stops when the validation accuracy
+    has failed to improve for that many consecutive epochs.
+    If patience is None, training continues for all max_epochs.
+
+    Whether or not early stopping occurs, the returned model is restored to
+    the parameters from the epoch with the highest validation accuracy.
+    This function does not write any files.
     """
     device = torch.device(device)
     criterion = nn.CrossEntropyLoss()
@@ -107,7 +125,7 @@ def train(
             n_seen += batch_size
             n_batches += 1
 
-        # 一整轮只同步一次，避免每个 batch 都把 GPU 卡住等 CPU。
+        # Synchronize only once per epoch to avoid blocking the GPU on every batch.
         stats = torch.stack([
             total_loss / n_seen,
             total_correct / n_seen,

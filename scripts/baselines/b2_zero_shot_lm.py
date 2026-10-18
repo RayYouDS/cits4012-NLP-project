@@ -1,16 +1,21 @@
-"""B2：零样本语言模型打分。
+"""B2: Zero-shot language model scoring.
 
-这些模型比我们从零训练的模型大约 100 到 500 倍。比较的是训练方式
-（从零训练 / 不训练、只靠预训练），不是同等大小的模型。
-预训练语料可能已经包含 PIQA，存在数据污染，报告里要写成局限。
+These models are approximately 100 to 500 times larger than our models
+trained from scratch. The comparison focuses on training approaches
+(training from scratch versus no task-specific training and relying solely
+on pretraining), rather than models of comparable size.
+The pretraining corpora may already contain PIQA data, creating a risk of
+data contamination. This must be acknowledged as a limitation in the report.
 
-使用各模型自带的分词器，不能把 piqa_bpe_v3 的 id 送进去。
+Each model must use its own tokenizer. Token IDs from piqa_bpe_v3 must not
+be passed to these models.
 
-从仓库根目录运行：
+Run from the repository root:
 
     python -m scripts.baselines.b2_zero_shot_lm
 
-只在验证集上比较 sum 和 mean，选定一种之后，测试集只评这一种。
+Compare sum and mean scoring on the validation set only. After selecting
+one scoring method, evaluate only that method on the test set.
 """
 
 import argparse
@@ -43,7 +48,10 @@ def format_continuation(solution):
 
 
 def encode_pair(tokenizer, context, continuation):
-    """分开编码再拼接。只对 continuation 的 token 计分。"""
+    """Encode the context and continuation separately, then concatenate them.
+
+    Only the continuation tokens are included in the scoring.
+    """
     context_ids = tokenizer.encode(context, add_special_tokens=False)
     continuation_ids = tokenizer.encode(continuation, add_special_tokens=False)
     if len(context_ids) == 0:
@@ -54,7 +62,11 @@ def encode_pair(tokenizer, context, continuation):
 
 
 def _continuation_sum(log_probs, input_ids, context_len, continuation_len):
-    """logits[t] 预测位置 t+1。continuation 的第一个 token 由 context 的最后一个位置预测。"""
+    """Sum the log probabilities of the continuation tokens.
+
+    logits[t] predicts the token at position t + 1. Therefore, the first
+    continuation token is predicted by the final context position.
+    """
     token_ids = input_ids[context_len:context_len + continuation_len]
     chosen = log_probs[context_len - 1:context_len + continuation_len - 1]
     token_logprob = chosen.gather(1, token_ids.unsqueeze(1)).squeeze(1)
@@ -68,11 +80,23 @@ def _forward_log_probs(model, input_ids, attention_mask):
 
 @torch.no_grad()
 def sum_logprobs(model, pairs, batch_size, device):
-    """pairs: (context_ids, continuation_ids)。返回 continuation 的对数概率之和，以及 token 数。
+    """Score each continuation by summing its token log probabilities.
 
-    GPU 上按 batch 右侧 padding，attention mask 把 pad 标成 0。真实 token 仍在位置 0..L-1。
-    CPU 的 float32 矩阵乘会随 batch 形状改变，同一条的 sum 在 batch=1 和 batch=8 之间
-    可以差到大约 3e-4。CPU 因此逐条前向，两种 batch 大小得到同一个分数。
+    Args:
+        pairs: A sequence of (context_ids, continuation_ids) pairs.
+
+    Returns:
+        A tuple containing the sum of continuation token log probabilities
+        and the corresponding number of continuation tokens for each pair.
+
+    On the GPU, sequences are right-padded within each batch, and the
+    attention mask marks padding tokens with 0. Real tokens remain at
+    positions 0 through L - 1.
+
+    On the CPU, float32 matrix multiplication can vary with batch shape.
+    The sum for the same sequence can differ by approximately 3e-4 between
+    batch sizes of 1 and 8. Therefore, CPU inference processes sequences
+    individually so that the scores remain consistent across batch sizes.
     """
     totals = np.empty(len(pairs), dtype=np.float64)
     counts = np.empty(len(pairs), dtype=np.int64)
@@ -133,7 +157,7 @@ def score_continuations(model, tokenizer, contexts, continuations, batch_size, d
 
 
 def score_solutions(model, tokenizer, frame, batch_size, device):
-    """同一道题的两个方案拼进一个 batch 序列，再拆开。"""
+    """Score both candidate solutions for each question in a single combined batch."""
     contexts = [format_context(goal) for goal in frame["goal"]]
     continuation_1 = [format_continuation(solution) for solution in frame["sol1"]]
     continuation_2 = [format_continuation(solution) for solution in frame["sol2"]]
@@ -169,7 +193,8 @@ def load_lm(model_name, device):
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
-    # 两个方案有时只差一个词，分数很接近。float16 的舍入可能把高低判反，所以一律 float32。
+    # The two candidate scores can be very close, sometimes differing by only
+    # one word. Float16 rounding may reverse their ranking, so float32 is used.
     dtype = torch.float32
     model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype)
     model.config.pad_token_id = tokenizer.pad_token_id
@@ -179,7 +204,10 @@ def load_lm(model_name, device):
 
 
 def choose_score(sum_accuracy, mean_accuracy):
-    """验证集准确率更高的那种。打平时用 mean，两种结果都写进 metrics。"""
+    """Choose the scoring method with higher validation accuracy.
+
+    If the two methods tie, choose mean. Both results are retained in metrics.
+    """
     if sum_accuracy > mean_accuracy:
         return "sum"
     return "mean"
@@ -253,7 +281,7 @@ def run_model(model_name, splits, limit, batch_size, output_dir, valid_df, test_
         "device": str(device),
         "dtype": str(dtype).replace("torch.", ""),
         "seconds": round(time.perf_counter() - started, 3),
-        "note": "模型比从零训练的模型大约 100 到 500 倍。预训练数据可能包含 PIQA。",
+        "note": "These models are approximately 100 to 500 times larger than models trained from scratch. The pretraining data may contain PIQA.",
         "versions": library_versions({"transformers": transformers.__version__}),
     }
     write_json(model_dir / "metrics.json", payload)

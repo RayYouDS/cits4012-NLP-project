@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 
 
-# ================ 指标计算 ========================
+# ================ Metric Computation ========================
 def _to_numpy(values) -> np.ndarray:
     if isinstance(values, torch.Tensor):
         values = values.detach().cpu().numpy()
@@ -14,16 +14,33 @@ def _to_numpy(values) -> np.ndarray:
 
 
 def compute_metrics(labels, preds) -> dict:
-    '''
-    根据正确答案和模型的选择计算指标。所有模型和 baseline 都用这个函数，保证指标口径一致。
+    """
+    Compute evaluation metrics from ground-truth labels and model predictions.
 
-    labels, preds: 等长的 0/1 序列（list / numpy / tensor 都可以），0 = sol1，1 = sol2
+    This function is shared by all models and baselines to ensure
+    consistent metric definitions.
 
-    返回:
-        accuracy:  选对的比例
-        precision / recall / f1: 把 "sol1 正确" 和 "sol2 正确" 各当一次正类分别计算，再取平均（macro average）
-                                 如果模型总偏向选某一边，accuracy 看不出来，但 f1 会明显下降
-    '''
+    Args:
+        labels: Ground-truth labels, represented as a list, NumPy array,
+                or tensor. Values must be 0 or 1.
+        preds: Predicted labels in the same format as labels.
+
+        Both labels and predictions use the following convention:
+            0 = solution 1
+            1 = solution 2
+
+    Returns:
+        A dictionary containing:
+            accuracy: The proportion of correctly classified examples.
+            precision: Macro-averaged precision across both classes.
+            recall: Macro-averaged recall across both classes.
+            f1: Macro-averaged F1 score across both classes.
+
+        Precision, recall, and F1 are computed by treating each class
+        as the positive class in turn, then averaging the results.
+        Macro-averaged metrics can reveal class-selection imbalances
+        that may not be apparent from accuracy alone.
+    """
     labels = _to_numpy(labels)
     preds = _to_numpy(preds)
 
@@ -35,11 +52,13 @@ def compute_metrics(labels, preds) -> dict:
     precisions, recalls, f1s = [], [], []
 
     for c in (0, 1):
+        # Calculate true positives, false positives, and false negatives
         tp = np.sum((preds == c) & (labels == c))
         fp = np.sum((preds == c) & (labels != c))
         fn = np.sum((preds != c) & (labels == c))
 
-        # 分母为 0 时（比如模型从来不选这一类）按 0 处理
+        # Use zero when a denominator is zero, such as when the model
+        # never predicts a particular class
         precision = tp / (tp + fp) if tp + fp > 0 else 0.0
         recall = tp / (tp + fn) if tp + fn > 0 else 0.0
         f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0
@@ -56,32 +75,42 @@ def compute_metrics(labels, preds) -> dict:
     }
 
 
-# ================ 模型评估 ========================
+# ================ Model Evaluation ========================
 @torch.no_grad()
 def evaluate(model, data_loader, device="cpu"):
-    '''
-    在验证集或测试集上评估模型：只做 forward，不更新参数。
+    """
+    Evaluate a model on a validation or test dataset without updating
+    its parameters.
 
-    参数:
-        model:       TransformerClassifier 或 RNNWithAttention（两种 forward 返回格式都兼容）
-        data_loader: get_piqa_dataloaders() 返回的 validate_loader 或 test_loader
-        device:      "cpu" 或 "cuda"，需要和 model 所在的设备一致
+    Args:
+        model: A TransformerClassifier or RNNWithAttention instance.
+               Both models' output formats are supported.
+        data_loader: A validation or test DataLoader returned by
+                     get_piqa_dataloaders().
+        device: The device on which the model runs, such as "cpu" or "cuda".
 
-    返回:
-        metrics:     dict，包含 loss / accuracy / precision / recall / f1
-        predictions: DataFrame，每道题一行
-            row_id     题目在数据集里的位置，对应 piqa_to_dataframe() 返回的 DataFrame 在 reset_index 之后的行号
-            label      正确答案（0 = sol1，1 = sol2）
-            logit_1    模型给 sol1 的分数
-            logit_2    模型给 sol2 的分数
-            prob_sol2  模型认为 sol2 正确的概率
-            pred       模型的选择
-            correct    是否选对
+    Returns:
+        metrics: A dictionary containing loss, accuracy, precision,
+                 recall, and F1 score.
 
-    注意:
-        1. 函数内部会切换到 model.eval()（关闭 dropout），结束后恢复调用前的模式，在训练循环里调用也不影响训练
-        2. row_id 依赖 DataLoader 不打乱顺序，validate_loader 和 test_loader 都是 shuffle=False，不要传入 train_loader
-    '''
+        predictions: A DataFrame with one row per example and the following
+                     columns:
+            row_id:    The example's position in the dataset, corresponding
+                       to its row index after reset_index().
+            label:     The ground-truth label (0 = solution 1, 1 = solution 2).
+            logit_1:   The model's score for solution 1.
+            logit_2:   The model's score for solution 2.
+            prob_sol2: The model's predicted probability that solution 2 is correct.
+            pred:      The model's predicted choice.
+            correct:   Whether the prediction matches the ground-truth label.
+
+    Notes:
+        1. The model is switched to evaluation mode to disable dropout,
+           then restored to its original training/evaluation mode.
+        2. row_id assumes that the DataLoader preserves dataset order.
+           The validation and test DataLoaders use shuffle=False.
+           Do not use the training DataLoader if stable row IDs are required.
+    """
     was_training = model.training
     model.eval()
 
@@ -97,10 +126,12 @@ def evaluate(model, data_loader, device="cpu"):
 
             outputs = model(input_1, input_2, mask_1, mask_2)
 
-            # RNNWithAttention 返回 (logits, weights)，TransformerClassifier 只返回 logits
+            # RNNWithAttention returns (logits, weights), whereas
+            # TransformerClassifier returns logits directly
             logits = outputs[0] if isinstance(outputs, tuple) else outputs  # [B, 2]
 
-            # 先累加每道题的 loss，最后除以总题数，得到整个数据集的平均 loss
+            # Accumulate the loss over all examples to compute the
+            # dataset-wide mean loss after evaluation
             total_loss += F.cross_entropy(logits, labels, reduction="sum").item()
 
             all_logits.append(logits.cpu())
@@ -130,11 +161,26 @@ def evaluate(model, data_loader, device="cpu"):
     return metrics, predictions
 
 
-def mcnemar_test(correct_a, correct_b) -> dict:
-    """配对比较两个模型在同一批题上的对错。
+# ================ McNemar's Test ========================
 
-    only_a / only_b 是只有一方做对的题数。chi2 使用连续性校正
-    (|b - c| - 1)^2 / (b + c)。b + c = 0 时没有分歧，p 取 1。
+def mcnemar_test(correct_a, correct_b) -> dict:
+    """
+    Compare two models' correctness on the same set of examples using
+    McNemar's test with continuity correction.
+
+    Args:
+        correct_a: Boolean array indicating whether model A is correct.
+        correct_b: Boolean array indicating whether model B is correct.
+
+    Returns:
+        A dictionary containing:
+            only_a: Number of examples correctly classified only by model A.
+            only_b: Number of examples correctly classified only by model B.
+            chi2: Continuity-corrected McNemar test statistic.
+            p_value: Corresponding asymptotic p-value.
+
+    If both models agree on every example's correctness, there are no
+    discordant pairs and the p-value is set to 1.
     """
     correct_a = np.asarray(correct_a).astype(bool)
     correct_b = np.asarray(correct_b).astype(bool)

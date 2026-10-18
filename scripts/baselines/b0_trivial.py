@@ -1,11 +1,14 @@
-"""B0：不训练的规则基线。
+"""B0: Non-trained rule-based baselines.
 
-从仓库根目录运行：
+Run from the repository root:
 
     python -m scripts.baselines.b0_trivial
 
-三个规则都是固定的，验证集和测试集都计算，不在验证集上做选择。
-random 用 numpy 种子 4012 抽一次：先验证集，再测试集，共用同一个 Generator。
+All three rules are fixed. Both validation and test sets are evaluated, and
+no model selection is performed on the validation set.
+The random baseline uses NumPy seed 4012 to generate predictions once:
+the validation set is processed first, followed by the test set, using the
+same Generator instance.
 """
 
 import time
@@ -40,7 +43,7 @@ def always_sol1_pred(n):
 
 
 def shorter_pred(df):
-    """字符数更短的方案。一样长时选 sol1。"""
+    """Choose the shorter solution by character count; choose sol1 if lengths are equal."""
     len_1 = df["sol1"].astype(str).str.len().to_numpy()
     len_2 = df["sol2"].astype(str).str.len().to_numpy()
     return (len_2 < len_1).astype(int)
@@ -97,7 +100,7 @@ def run(output_dir=OUTPUT_DIR, data_dir=DATA_DIR):
         "model_name": "rules",
         "n_params": 0,
         "selection": None,
-        "note": "规则固定。random 用 numpy 种子 4012，先验证集再测试集。一样长时 shorter 选 sol1。",
+        "note": "Rules are fixed. The random baseline uses NumPy seed 4012, processing the validation set before the test set. The shorter baseline chooses sol1 when both solutions have equal lengths.",
         "label_0_rate": label_rate,
         "rules": report,
         "seconds": round(time.perf_counter() - started, 3),

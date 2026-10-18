@@ -1,11 +1,13 @@
-"""M3：GRU、LSTM、Transformer 在若干学习率和种子上训练，只看验证集。
+"""
+M3: Train GRU, LSTM, and Transformer models across multiple learning rates and random seeds, using only the validation set.
 
-从仓库根目录运行：
+Run from the repository root:
 
     python -m scripts.training.run_m3 --config config/m3_params.json
 
-不重新训练 tokenizer，也不改数据切分。tokenize_piqa_dataframe 返回什么划分，这里就用什么划分。
-不使用测试集。
+The tokenizer is not retrained, and the data split is not modified.
+The splits returned by tokenize_piqa_dataframe are used as provided.
+The test set is not used.
 """
 
 from __future__ import annotations
@@ -39,8 +41,10 @@ ALPHA = 0.05
 
 
 def build_model(name, vocab_size, pad_id, cfg):
-    # 缺省和模型构造函数一致。pooling 若不从 config 读取，mean pooling 训出的
-    # checkpoint 能被按 cls 建的模型加载，不会报错，但评估结果是错的。
+    # The defaults match those used by the model constructors.
+    # If pooling is not read from the config, a checkpoint trained with mean
+    # pooling can still be loaded into a model configured for CLS pooling
+    # without raising an error, but the evaluation results will be incorrect.
     dropout_rate = cfg.get("dropout_rate", 0.1)
     if name in {"rnn", "gru", "lstm"}:
         return RNNWithAttention(
@@ -69,7 +73,11 @@ def build_model(name, vocab_size, pad_id, cfg):
 
 
 def build_optimizer(name, parameters, lr, weight_decay=None, momentum=0.9):
-    """weight_decay 为 None 时不传入，沿用该优化器的 PyTorch 默认值。momentum 只用于 SGD。"""
+    """Build an optimizer.
+
+    If weight_decay is None, it is omitted so that the optimizer uses its
+    default PyTorch value. The momentum parameter is used only by SGD.
+    """
     name = name.lower()
     kwargs = {"lr": float(lr)}
     if weight_decay is not None:
@@ -106,7 +114,7 @@ def _as_bool(series):
 
 
 def select_table(summary):
-    """每个模型用各 seed 的平均验证准确率选出学习率。"""
+    """Select the learning rate with the highest mean validation accuracy for each model across seeds."""
     rows = []
     for model, group in summary.groupby("model", sort=False):
         stats = group.groupby("learning_rate")["valid_accuracy"].agg(["mean", "std", "count"])
@@ -288,12 +296,12 @@ def run(cfg):
             "mcnemar": compared,
             "significant": significant,
         })
-        verdict = "显著" if significant else "不显著"
+        verdict = "significant" if significant else "not significant"
         print(
             f"\nMcNemar {first['model']} vs {second['model']} "
             f"(seed {seed0}): only_a={compared['only_a']} only_b={compared['only_b']} "
             f"chi2={compared['chi2']:.4f} p={compared['p_value']:.4f} "
-            f"差别{verdict} (alpha={ALPHA})"
+            f"difference is {verdict} (alpha={ALPHA})"
         )
     else:
         print("\nfewer than 2 models, skip McNemar")

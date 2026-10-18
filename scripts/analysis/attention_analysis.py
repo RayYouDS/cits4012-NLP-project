@@ -1,11 +1,13 @@
-"""E5：主模型的注意力分析。只用验证集。
+"""E5: Attention analysis for the main model, using the validation set only.
 
-模型是 E2 定稿的 Transformer（2 层、4 头、CLS pooling、post-norm）。
-分类用的是 [CLS]，所以只分析 [CLS] 那一行。
-注意力和预测同时出现只能说明相关，不能当成模型为什么选这一边的解释
-（Jain and Wallace, 2019; Wiegreffe and Pinter, 2019）。
+The model is the finalized E2 Transformer (2 layers, 4 heads, CLS pooling,
+post-norm).
+Classification uses [CLS], so only the [CLS] row is analyzed.
+The co-occurrence of attention patterns and predictions indicates correlation,
+not an explanation of why the model chose one option over the other
+(Jain and Wallace, 2019; Wiegreffe and Pinter, 2019).
 
-从仓库根目录运行：
+Run from the repository root:
 
     python -m scripts.analysis.attention_analysis --seeds 4012 4013 4014 --out reports/attention
 """
@@ -65,7 +67,11 @@ def load_model(cfg, seed):
 
 
 def valid_frame(tokenizer):
-    """只保留验证集。划分函数会打开测试文件，这里立刻丢掉，不编码、不前向。"""
+    """Keep only the validation set.
+
+    The split function loads the test file as well, so discard the test data
+    immediately without encoding it or performing a forward pass.
+    """
     _train, valid, _test = piqa_to_dataframe(DATA_DIR)
     del _train, _test
     valid = valid.reset_index(drop=True)
@@ -86,10 +92,12 @@ def make_loader(frame, tokenizer, batch_size):
 
 @torch.no_grad()
 def layer_states(model, ids, mask):
-    """逐层取出注意力，并按 post-norm 算出下一层的输入。
+    """Extract attention weights from each layer and compute the next layer's
+    input using post-norm operations.
 
-    返回最后一层的输出 [B, L, D]，以及每层的权重 [B, H, L, L]。
-    调用前模型必须已经 eval()，这样 dropout 是恒等映射。
+    Returns the final-layer output of shape [B, L, D] and the attention weights
+    from each layer, each with shape [B, H, L, L].
+    The model must already be in eval() mode so that dropout acts as the identity.
     """
     hidden = model.embedding(ids)
     if model.enable_pos_emb:
@@ -114,13 +122,15 @@ def layer_states(model, ids, mask):
 
 
 def word_distance(left, right):
-    """词级编辑距离，以及两边没有对齐上的词下标。
+    """Calculate word-level edit distance and return the indices of unaligned words.
 
-    一个词被换成另一个词，距离记 1。这个口径下验证集里
-    距离不超过 1 的约占 35.4%，不超过 2 的约占 59.7%。
+    Replacing one word with another counts as one edit. Under this definition,
+    approximately 35.4% of validation examples have a distance of at most 1,
+    and approximately 59.7% have a distance of at most 2.
     """
     if len(left) < len(right):
-        # 距离对称，回溯时再按原顺序走，这里不交换。
+        # Edit distance is symmetric; backtracking proceeds in the original order,
+        # so the sequences are not swapped here.
         pass
     rows = len(left) + 1
     cols = len(right) + 1
@@ -148,14 +158,18 @@ def word_distance(left, right):
         else:
             diff_right.append(j - 1)
             j -= 1
-    # 回溯从句尾走到句首，翻回阅读顺序。下标集合不变。
+    # Backtracking proceeds from the end of each sequence to the beginning.
+    # Reverse the lists to restore reading order; the sets of indices are unchanged.
     diff_left.reverse()
     diff_right.reverse()
     return score[-1][-1], diff_left, diff_right
 
 
 def piece_groups(token_ids, tokenizer):
-    """以 ▁ 开头的子词是一个词的开头。返回每组在 token_ids 里的下标，以及解码后的词。"""
+    """Group subword pieces into words using the ▁ prefix as a word boundary.
+
+    Returns the token indices belonging to each group and the decoded words.
+    """
     pieces = [tokenizer.id_to_piece(int(token_id)) for token_id in token_ids]
     groups, buffer = [], []
     for index, piece in enumerate(pieces):
@@ -170,10 +184,11 @@ def piece_groups(token_ids, tokenizer):
 
 
 def cls_distributions(attentions, mask):
-    """每层按头平均后的 [CLS] 行，以及 attention rollout 的 [CLS] 行。
+    """Compute the [CLS] row after averaging heads at each layer and after attention rollout.
 
-    rollout 用 Abnar and Zuidema (2020)：每层 A' = 0.5·A + 0.5·I，
-    按行归一化，从第 0 层乘到最后一层。padding 不参加归一化。
+    Rollout follows Abnar and Zuidema (2020): for each layer, compute
+    A' = 0.5 * A + 0.5 * I, normalize each row, and multiply the matrices
+    from the first layer to the last. Padding positions are excluded from normalization.
     """
     valid = mask.to(dtype=attentions[0].dtype)
     eye = torch.eye(mask.shape[1], device=mask.device, dtype=valid.dtype)
@@ -193,7 +208,10 @@ def cls_distributions(attentions, mask):
 
 
 def region_masks(ids, mask, cls_id, sep_id, eos_id):
-    """goal、方案、特殊符号三组。特殊符号是 [CLS]、[SEP] 和 EOS（句末 </s>）。"""
+    """Create masks for three regions: goal, solution, and special tokens.
+
+    Special tokens include [CLS], [SEP], and EOS (the end-of-sequence token </s>).
+    """
     special = ((ids == cls_id) | (ids == sep_id) | (ids == eos_id)) & mask
     goal = torch.zeros_like(mask)
     solution = torch.zeros_like(mask)
@@ -260,7 +278,9 @@ def format_pm(values):
 
 
 def format_prob(value):
-    """很小的概率用科学计数，很接近 1 的保留六位，避免写成 0 或 1。"""
+    """Format very small probabilities in scientific notation and values near 1
+    to six decimal places, avoiding representations rounded to 0 or 1.
+    """
     if value < 1e-4:
         return f"{value:.2e}"
     if value > 0.9999:
@@ -319,7 +339,10 @@ def analyse_seed(model, tokenizer, frame, loader, seed, saved_predictions):
                 groups, decoded = piece_groups(solution_ids, tokenizer)
                 whitespace = words_1 if side == 0 else words_2
                 if decoded != whitespace:
-                    raise ValueError(f"row {row_id} side {side} 的子词分组和空格分词不一致")
+                    raise ValueError(
+                        f"Subword grouping does not match whitespace tokenization "
+                        f"for row {row_id}, side {side}"
+                    )
                 diff_positions = []
                 word_positions = []
                 word_mass = []
@@ -403,14 +426,17 @@ def analyse_seed(model, tokenizer, frame, loader, seed, saved_predictions):
     )
     if pred_mismatch or label_mismatch or correct_mismatch:
         raise RuntimeError(
-            f"seed {seed} 的预测和 val_predictions.csv 不一致："
+            f"Predictions for seed {seed} do not match val_predictions.csv: "
             f"pred {pred_mismatch}, label {label_mismatch}, correct {correct_mismatch}"
         )
     if max_cls_error >= CLS_ATOL:
-        raise RuntimeError(f"seed {seed} 的 [CLS] 误差 {max_cls_error} 超过 {CLS_ATOL}")
+        raise RuntimeError(
+            f"[CLS] error for seed {seed} ({max_cls_error}) exceeds {CLS_ATOL}"
+        )
     if abs(sum_low - 1) > CLS_ATOL or abs(sum_high - 1) > CLS_ATOL or pad_key_max > CLS_ATOL:
         raise RuntimeError(
-            f"seed {seed} 的注意力行和检查失败：sum [{sum_low}, {sum_high}]，pad {pad_key_max}"
+            f"Attention row-sum verification failed for seed {seed}: "
+            f"sum [{sum_low}, {sum_high}], pad {pad_key_max}"
         )
     print(
         f"  seed {seed} verify cls {max_cls_error:.3e} "
@@ -475,7 +501,8 @@ def diff_table(all_rows):
 
 
 def error_table(all_rows):
-    # 长度不依赖 seed。四分位按两段输入里较长的那段切，区间对三个 seed 相同。
+    # Length is independent of seed. Compute quartiles using the longer of the two input sequences,
+    # ensuring that the bin boundaries are identical across all three seeds.
     first_rows = next(iter(all_rows.values()))
     length_values = np.asarray([max(candidate["length"] for candidate in row["candidates"]) for row in first_rows])
     edges = np.quantile(length_values, [0, 0.25, 0.5, 0.75, 1.0])
@@ -524,22 +551,22 @@ def select_examples(rows):
     correct = [item for item in eligible if item["correct"]]
     wrong = [item for item in eligible if not item["correct"]]
     if len(correct) < 2 or len(wrong) < 2:
-        raise RuntimeError("长度不超过 30 的题里，做对或做错的不足 2 题")
+        raise RuntimeError("Fewer than two correct or incorrect examples have lengths of at most 30 tokens.")
     chosen = correct[:2] + wrong[:2]
     used = {item["row_id"] for item in chosen}
     minimal = [item for item in eligible if item["n_diff"] <= 2 and item["row_id"] not in used]
     minimal_correct = [item for item in minimal if item["correct"]]
     minimal_wrong = [item for item in minimal if not item["correct"]]
     if not minimal_correct or not minimal_wrong:
-        raise RuntimeError("最小差异对里做对或做错的题不够")
+        raise RuntimeError("Not enough correct or incorrect examples among the minimal-difference pairs.")
     chosen.extend([minimal_correct[0], minimal_wrong[0]])
     labels = (
-        ["把握最大且做对"] * 2
-        + ["把握最大但做错"] * 2
-        + ["最小差异且做对", "最小差异但做错"]
+        ["Highest confidence and correct"] * 2
+        + ["Highest confidence but incorrect"] * 2
+        + ["Minimal difference and correct", "Minimal difference but incorrect"]
     )
     for item, label in zip(chosen, labels):
-        item["类别"] = label
+        item["category"] = label
     return chosen
 
 
@@ -549,7 +576,7 @@ def side_name(index):
 
 @torch.no_grad()
 def example_attention(model, tokenizer, frame, row):
-    """把选中的题再跑一次，留下画图用的子词级注意力和四个头。"""
+    """Run the selected examples again and retain subword-level attention distributions and all four heads for plotting."""
     cls_id = tokenizer.piece_to_id("[CLS]")
     sep_id = tokenizer.piece_to_id("[SEP]")
     eos_id = tokenizer.eos_id()
@@ -614,7 +641,7 @@ def draw_candidate(axis, candidate, vmax):
     for tick, index in zip(axis.get_xticklabels(), range(len(candidate["tokens"]))):
         if index in candidate["diff_positions"]:
             tick.set_color("#d73027")
-    # 线画在 [SEP] 和方案第一个子词之间，把 goal 和方案分开。
+    # Draw a line between [SEP] and the first subword of the solution to separate the goal from the solution.
     axis.axvline(candidate["sep_index"] + 0.5, color="white", linewidth=1.0, zorder=3)
     axis.set_ylabel(candidate["name"])
 
@@ -627,7 +654,10 @@ def save_figure(fig, path, tight=True):
 
 
 def plot_examples(examples, path):
-    """每题两条热图。高度按英寸留出，避免两行色块被竖排子词挤成一条线。"""
+    """Plot two heatmaps per example, 
+    allocating sufficient vertical space to prevent the two heatmap rows 
+    from collapsing under vertically rotated subword labels.
+    """
     configure_matplotlib()
     n = len(examples)
     width = 6.3
@@ -693,12 +723,16 @@ def plot_examples(examples, path):
         "Each item has its own color scale.",
         fontsize=7, ha="left", va="bottom",
     )
-    # 边距已经按 6.3 英寸留好，不用 tight，避免导出宽度被撑过双栏。
+    # The margins have already been allocated within the 6.3-inch figure width,
+    # so do not use tight bounding boxes, 
+    # which could make the exported figure exceed the two-column width.
     save_figure(fig, path, tight=False)
 
 
 def content_pieces(candidate):
-    """去掉特殊符号。这些位置不画，也不进入色标。goal 和方案之间放一条竖线。"""
+    """Remove special tokens so they are excluded from the plot and color scale.
+    Place a vertical separator between the goal and the solution.
+    """
     sep = candidate["sep_index"]
     goal, solution = [], []
     for index, (token, weight) in enumerate(zip(candidate["tokens"], candidate["rollout"])):
@@ -730,7 +764,9 @@ def text_on_blues(value, vmax):
 
 
 def pack_highlight_line(pieces, widths, x0, x_max, gap):
-    """按宽度换行。竖线不单独留在行尾，跟着后面的子词走。"""
+    """Wrap pieces according to their widths. 
+    Keep the separator with the following subword rather than leaving it at the end of a line.
+    """
     lines, current, x = [], [], x0
     index = 0
     while index < len(pieces):
@@ -784,10 +820,10 @@ def draw_highlight_line(axis, placed, y, box_h, fontsize, vmax):
 
 
 def draw_scale(fig, axis, x, y, bar_w, vmax, fig_w, fig_h):
-    """横条色标，两端标 0 和本题最大值。"""
+    """Draw a horizontal color scale labeled with 0 and the maximum value for the current example."""
     left_label = "0"
     right_label = f"{vmax:.2f}"
-    # 标签宽度在主坐标里另留，这里 x 是色条左端。
+    # Leave room for the labels in the main axes; x marks the left edge of the color bar.
     bar_h = 0.07
     color_axis = fig.add_axes([
         x / fig_w,
@@ -824,7 +860,9 @@ def wrap_words(renderer, text, fontsize, max_width):
 
 
 def plot_compact_examples(examples, path, width, max_height):
-    """文字高亮。背景是 rollout，两个候选共用色标。只画内容子词。"""
+    """Plot text highlights using rollout as the background; 
+    share one color scale between both candidates and display only content subwords.
+    """
     configure_matplotlib()
     fontsize = 7
     pad_x = 0.012
@@ -841,7 +879,8 @@ def plot_compact_examples(examples, path, width, max_height):
         "[CLS], [SEP], and [EOS] are omitted and excluded from the scale. "
         "Underlined tokens differ between the two solutions."
     )
-    # 先量宽度，再按实际行数定高度，保证不超过报告给出的上限。
+    # Measure text widths first, then determine the figure height from the actual number of lines 
+    # to stay within the specified height limit.
     probe = plt.figure(figsize=(width, 2.0))
     probe.canvas.draw()
     renderer = probe.canvas.get_renderer()
@@ -891,7 +930,7 @@ def plot_compact_examples(examples, path, width, max_height):
         body += item_gap
     height = margin_top + body + caption_h
     if max_height is not None and height > max_height:
-        raise RuntimeError(f"压缩图高度 {height:.2f} 英寸，超过 {max_height:.2f}")
+        raise RuntimeError(f"Compact figure height {height:.2f} inches exceeds the limit of {max_height:.2f} inches.")
 
     fig = plt.figure(figsize=(width, height))
     axis = fig.add_axes([0, 0, 1, 1])
@@ -936,7 +975,9 @@ def plot_compact_examples(examples, path, width, max_height):
 
 
 def plot_summary_compact(shares, errors, path):
-    """单栏图 B：占比和准确率上下排，总高 3.2 英寸。"""
+    """Create a single-column Figure B with attention shares above accuracy, 
+    using a total height of 3.2 inches.
+    """
     configure_matplotlib()
     plt.rcParams.update({
         "font.size": 7,
@@ -970,7 +1011,8 @@ def plot_summary_compact(shares, errors, path):
     axes[0].set_yticks([0, 0.5, 1])
     axes[0].set_ylabel("share")
     axes[0].set_title("Where [CLS] attends", pad=2)
-    # 最高的柱子大约 0.75，图例放在坐标轴内部上方，避免和标题叠在一起。
+    # The tallest bar is approximately 0.75. 
+    # Place the legend inside the top of the axes to avoid overlapping with the title.
     axes[0].legend(
         frameon=False, ncol=3, fontsize=7, loc="upper center",
         borderaxespad=0.05,

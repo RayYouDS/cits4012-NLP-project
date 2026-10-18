@@ -6,11 +6,13 @@ import torch.nn as nn
 
 class SelfAttention(nn.Module):
     def __init__(self, dimension):
-        '''
-        这个 Attention 使用 Scaled Dot-Product
-        目的是尽可能与 Transformer 的 Attention 计算机制对齐
-        使对照试验更有说服力
-        '''
+        """
+        Implements scaled dot-product self-attention.
+
+        The computation is designed to align with the attention mechanism
+        used in the Transformer, making comparisons between architectures
+        more consistent in the experiments.
+        """
         super().__init__()
         self.dimension = dimension
 
@@ -43,6 +45,6 @@ class SelfAttention(nn.Module):
         # Weighted sum
         output = weights @ V
 
-        # output 是更新后的实际值（语义）
-        # weight 是实际起作用的注意力权重矩阵
+        # output contains the context-enriched token representations,
+        # while weights contains the attention weights used to compute them
         return output, weights

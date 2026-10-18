@@ -1,4 +1,6 @@
-"""基线共用的预测表和 metrics.json。列和 evaluate() 的 predictions 一致。"""
+"""Shared prediction tables and metrics.json utilities for baselines.
+The prediction columns match those returned by evaluate().
+"""
 
 import json
 import sys
@@ -25,7 +27,11 @@ def library_versions(extra=None):
 
 
 def prediction_frame(labels, logit_1, logit_2, prob_sol2, pred):
-    """row_id 是 reset_index(drop=True) 之后的行号，用来和主模型逐题对齐。"""
+    """Create a prediction table.
+
+    row_id is the row index after reset_index(drop=True), allowing predictions
+    to be aligned question by question with those from the main model.
+    """
     labels = np.asarray(labels)
     pred = np.asarray(pred).astype(int)
     frame = pd.DataFrame({

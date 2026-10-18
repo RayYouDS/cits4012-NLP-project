@@ -1,20 +1,26 @@
-"""B3：微调预训练编码器，做二选一。
+"""B3: Fine-tune pretrained encoders for binary choice classification.
 
-distilbert-base-uncased 约 6600 万参数，roberta-base 约 1.25 亿。
-我们从零训练的模型约 100 万，大约小 60 到 125 倍。
-这两个模型都经过预训练，比较的是训练方式，不是同等大小的模型。
-预训练语料可能包含 PIQA 相关的文本，报告里要写成局限。
+distilbert-base-uncased has approximately 66 million parameters, while
+roberta-base has approximately 125 million parameters.
+Our models trained from scratch have approximately 1 million parameters,
+making them about 60 to 125 times smaller.
+Both models are pretrained, so this comparison concerns training strategies
+rather than models of equivalent size.
+The pretraining corpora may contain PIQA-related text; this must be
+acknowledged as a limitation in the report.
 
-使用各自的分词器，不能把 piqa_bpe_v3 的 id 送进去。
-每题两个句对：(goal, sol1) 和 (goal, sol2)。
+Use each model's own tokenizer. Do not pass piqa_bpe_v3 token IDs to these models.
+Each question is represented by two sentence pairs: (goal, sol1) and (goal, sol2).
 
-从仓库根目录运行：
+Run from the repository root:
 
     python -m scripts.baselines.b3_finetune
 
-先固定种子，再加载模型。验证准确率最高的那一轮参数留在内存里，
-训练结束后载回，测试集只评这一次。不保存模型权重。
-某个 seed 失败就记下来，不重跑、不挑结果。
+Set the random seed before loading the model. Keep the parameters from the
+epoch with the highest validation accuracy in memory, then restore them after
+training. Evaluate the test set only once using the restored model.
+Do not save model weights.
+If a seed fails, record the failure without rerunning it or selecting results.
 """
 
 import argparse
@@ -58,7 +64,9 @@ class PIQAChoiceDataset(Dataset):
 
 
 def collate_choices(batch, tokenizer, max_length):
-    """两个选项动态 pad 成 [B, 2, L]。L 是这个 batch 里最长的句对，不超过 max_length。"""
+    """Dynamically pad both choices into [B, 2, L], where L is the longest
+    sentence pair in the batch and does not exceed max_length.
+    """
     goals, sol1, sol2, labels = zip(*batch)
     first, second = [], []
     for goal, left, right in zip(goals, sol1, sol2):
@@ -84,11 +92,12 @@ def collate_choices(batch, tokenizer, max_length):
 
 
 def truncation_rate(frame, tokenizer, max_length):
-    """每个 (goal, 方案) 句对算一次。超过 max_length 的比例。"""
+    """Calculate the proportion of (goal, solution) pairs exceeding max_length."""
     if len(frame) == 0:
         return {"n_choices": 0, "n_truncated": 0, "rate": 0.0}
     goals = frame["goal"].astype(str).tolist()
-    # 只统计长度。临时放宽 model_max_length，避免未截断的长句触发警告。
+    # Only measure sequence lengths. Temporarily increase model_max_length to
+    # prevent warnings for long sequences that are intentionally not truncated.
     previous_max = tokenizer.model_max_length
     tokenizer.model_max_length = int(1e9)
     try:
@@ -138,7 +147,10 @@ def _loader(frame, tokenizer, batch_size, max_length, shuffle, seed):
 
 
 def _lr_at(step, total_steps, warmup_steps):
-    """step 从 0 计。前 warmup_steps 线性升到 1，之后线性降到 0。"""
+    """Return the learning-rate multiplier for a zero-indexed step.
+
+    Increase linearly to 1 during warmup_steps, then decrease linearly to 0.
+    """
     if step < warmup_steps:
         return float(step + 1) / float(max(1, warmup_steps))
     remain = total_steps - warmup_steps
@@ -147,7 +159,7 @@ def _lr_at(step, total_steps, warmup_steps):
 
 @torch.no_grad()
 def predict_frame(model, frame, tokenizer, batch_size, max_length, device, use_token_type_ids):
-    """eval 模式、float32。不使用自动混合精度。"""
+    """Evaluate the model in eval mode using float32 without automatic mixed precision."""
     was_training = model.training
     model.eval()
     loader = _loader(frame, tokenizer, batch_size, max_length, shuffle=False, seed=0)
@@ -196,7 +208,8 @@ def train_one_seed(
     max_length, splits, output_dir,
 ):
     started = time.perf_counter()
-    # CPU 上多线程矩阵乘的加法顺序不固定，同一 seed 两次运行会对不齐。
+    # Multithreaded matrix operations on CPU may use different addition orders,
+    # making repeated runs with the same seed inconsistent.
     torch.set_num_threads(1)
     set_seed(seed)
     model, tokenizer, use_token_type_ids = load_multiple_choice(model_name)
@@ -331,7 +344,7 @@ def train_one_seed(
         "eval_dtype": "float32",
         "n_train": int(len(train_df)),
         "seconds": round(time.perf_counter() - started, 3),
-        "note": "模型比从零训练的模型大约大 60 到 125 倍，并且经过预训练。预训练语料可能包含 PIQA。",
+        "note": "The model is approximately 60 to 125 times larger than models trained from scratch and has been pretrained. The pretraining corpus may contain PIQA-related text.",
         "versions": library_versions({"transformers": transformers.__version__}),
     }
     write_json(seed_dir / "metrics.json", payload)

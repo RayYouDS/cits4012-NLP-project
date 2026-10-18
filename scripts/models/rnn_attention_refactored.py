@@ -5,11 +5,16 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
 class RNNWithAttention(nn.Module):
-    '''
-    RNN 的所有模型默认开启 Bi-Directional，否则会造成 Attention 效果大打折扣
-    这个模型主要与 Transformer 进行比较，因此实验设计点不需要考虑是否关掉双向机制
-    支持架构: rnn, gru, lstm
-    '''
+    """
+    A configurable recurrent encoder with optional self-attention.
+
+    Supported architectures: RNN, GRU, and LSTM.
+
+    Bidirectional encoding is enabled by default. For comparisons with
+    Transformer models, the experimental design focuses on the recurrent
+    architecture rather than removing bidirectionality, which may reduce
+    the effectiveness of the attention mechanism.
+    """
     def __init__(
         self,
         vocab_size=8000,
@@ -18,26 +23,27 @@ class RNNWithAttention(nn.Module):
         padding_idx=3,
 
         architecture="gru",
-        bidirectional=True,       # 默认开启双向
+        bidirectional=True,       # Enable bidirectional encoding by default
         enable_attention = True,
-        dropout_rate=0.1  # 增加全局 dropout_rate 参数
+        dropout_rate=0.1  # Global dropout rate
     ):
         super().__init__()
 
-        # 全局 Attention 开关
+        # Global switch for enabling or disabling attention
         self.enable_attention = enable_attention
 
-        # 全局 model 架构标志
+        # Identifier for the recurrent architecture
         self.architecture = architecture
 
-        # 全局双向标志 （1 单项，2 双向）
+        # Number of recurrent directions: 1 for unidirectional, 2 for bidirectional
         self.bidirectional = bidirectional
         self.num_directions = 2 if bidirectional else 1
 
-        # 双向模式下，RNN 输出隐藏维度翻倍 (e.g. 128 * 2 = 256)
+        # Bidirectional RNNs concatenate forward and backward outputs,
+        # doubling the output dimension (e.g., 128 * 2 = 256)
         self.rnn_output_dim = hidden_dim * self.num_directions
 
-        # 1. 动态生成 Recurrent 模块
+        # Dynamically select the recurrent module
         if architecture not in ('rnn', 'gru', 'lstm'):
             raise ValueError(f"Unsurpported architecture: {architecture}, choose between 'rnn', 'gru' or 'lstm'")
 
@@ -48,14 +54,14 @@ class RNNWithAttention(nn.Module):
         }.get(self.architecture)
 
         
-        # 初始化 Embedding
+        # Embedding layer
         self.embedding = nn.Embedding(
             vocab_size,
             embedding_dim,
             padding_idx=padding_idx
         )
 
-        # 用于 embedding 层的 dropout
+        # Dropout applied to token embeddings
         self.emb_dropout = nn.Dropout(p=dropout_rate)
 
         self.rnn = rnn_class(
@@ -66,12 +72,12 @@ class RNNWithAttention(nn.Module):
         )
 
 
-        # Attention 和线性分类头都接收 RNN 的实际输出维度
-        # 单向: hidden_dim
-        # 双向: hidden_dim * 2
+        # Both attention and the classification head use the actual
+        # recurrent output dimension:
+        # hidden_dim for unidirectional models, hidden_dim * 2 for bidirectional models
         self.attention = SelfAttention(self.rnn_output_dim)
 
-        # 全连接层前的 Dropout (防过拟合核心)
+        # Dropout applied before the classification head to help reduce overfitting
         self.fc_dropout = nn.Dropout(p=dropout_rate)
 
         self.classifier = nn.Linear(self.rnn_output_dim, 1)
@@ -81,41 +87,39 @@ class RNNWithAttention(nn.Module):
 
         # [B, L] -> [B, L, E]
         x = self.embedding(input_ids)
-        x = self.emb_dropout(x) # embedding 加入 dropout
+        x = self.emb_dropout(x) # Apply dropout to embeddings
 
-        # 数据预处理：将数据和实际序列长度打包，减少无效 Pad 计算
-        lengths = mask.sum(dim=1).long()  # 保持在 GPU 上
+        # Compute valid sequence lengths to avoid recurrent computation over padding
+        lengths = mask.sum(dim=1).long()
         
-        # 将长度强制约束在 [1, L]，防止出现全 Padding 极端情况导致的 0 长度报错
+        # Clamp lengths to [1, L] to avoid errors caused by zero-length sequences
         lengths = lengths.clamp(min=1)
 
-        # 打包 (Packing)：跳过 Padding 计算
-        # 这一部分需要单独开 GPU Runtime 测试
+        # Pack sequences to skip padded positions during recurrent computation
         packed_x = pack_padded_sequence(
             x, 
-            lengths=lengths.cpu(),  # 这里单独测试
+            lengths=lengths.cpu(),
             batch_first=True, 
             enforce_sorted=False
         )
 
-        # 送入 RNN 计算
+        # Run the recurrent encoder
         packed_states, last_hidden = self.rnn(packed_x)
 
         if self.architecture == "lstm":
-            # 对 LSTM 架构需要特殊处理 last hidden
-            # last_hidden 是一个元组 (h_n, c_n)，仅需提取隐藏状态 h_n
+            # LSTM returns a tuple (h_n, c_n); only the hidden state h_n is needed
             last_hidden = last_hidden[0]  # [num_directions, B, H]
         
-        # 5. 解包 (Unpacking)：还原回 [B, L, H]
+        # Unpack the recurrent outputs back to [B, L, H]
         states, _ = pad_packed_sequence(
             packed_states,
             batch_first=True, 
             total_length=input_ids.size(1) 
         )
 
-        # 根据是否打开 Attention 进行特征聚合
+        # Aggregate token representations according to the attention setting
         if self.enable_attention:
-            # 开启 Attention 时，在 Unpacked 的 states 上做 Self-Attention 与 Pooling
+            # Apply self-attention to the unpacked recurrent states
             padding_mask = ~mask
             attended, weights = self.attention(states, padding_mask)
 
@@ -124,23 +128,23 @@ class RNNWithAttention(nn.Module):
             context = (attended * valid_mask).sum(dim=1) / valid_mask.sum(dim=1).clamp(min=1e-9)
 
         else:
-            # 不开启 Attention 时，直接使用 last_hidden 作为最终语义编码
-            # 因为使用了 pack_padded_sequence 机制，因此 last_hidden 没有受到 Pad 污染
+            # Use the final hidden state directly when attention is disabled.
+            # Packed sequences ensure that padding does not affect the final hidden state.
             weights = None
 
-            # 还需要根据单向和双向进行特殊处理
+            # Handle unidirectional and bidirectional hidden states separately
             if self.bidirectional:
-                # last_hidden 形状为 [num_layers * 2, B, H]
-                # -2 索引代表最后一层的 Forward，-1 代表最后一层的 Backward
+                # For the final layer, -2 indexes the forward state
+                # and -1 indexes the backward state
                 forward_last = last_hidden[-2]
                 backward_last = last_hidden[-1]
                 context = torch.cat([forward_last, backward_last], dim=-1)
 
             else:
-                # 单向模式: 取最后一层的隐藏状态 [-1] -> [B, H]
+                # For a unidirectional model, use the final layer's hidden state
                 context = last_hidden[-1]
 
-        # 在输入 Classifier 前施加 Dropout
+        # Apply dropout before the classification head
         context = self.fc_dropout(context)
 
         return context, weights
@@ -159,7 +163,7 @@ class RNNWithAttention(nn.Module):
 
         weights = [weights_1, weights_2]
 
-        # 共享分类器
+        # Apply the shared classification head to both candidates
         logit_1 = self.classifier(context_1)
         logit_2 = self.classifier(context_2)
 
@@ -170,17 +174,19 @@ class RNNWithAttention(nn.Module):
             dim=1
         )
 
-        # 在不开 Attention 的情况下，weights 里面全是 None
+        # Attention weights are None for both candidates when attention is disabled
         return logits, weights
 
 
     @torch.no_grad()
     def predict(self, input_1, input_2, mask_1, mask_2):
-        '''
-        不带反向传播的预测函数，不涉及梯度下降
-        这里不会打开 model.eval()，防止在训练过程中忘记关闭，造成 Silent Failure
-        进行性能测试时应手动调整模型的 train 和 eval 模式
-        '''
+        """
+        Perform inference without computing gradients.
+
+        This method does not switch the model to evaluation mode automatically.
+        This avoids silently changing the model's training state. Set the model
+        to eval() explicitly when performing evaluation or benchmarking.
+        """
         outputs = self.forward(input_1, input_2, mask_1, mask_2)
 
         return outputs

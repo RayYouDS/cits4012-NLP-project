@@ -1,8 +1,11 @@
-"""按长度分桶的训练集 batch 采样。
+"""Length-bucketed batch sampler for the training set.
 
-PIQA 每题大约 35 个 token。batch 里只要混进一条长句，整批都要补到那个长度。
-按 goal 切分的训练集上，batch_size=64 随机打乱的平均补齐长度是 135.6；先在一个窗口里按长度排好再切 batch，
-平均补齐长度是 40.1。验证集和测试集不要用这个 sampler。
+Each PIQA example contains approximately 35 tokens. If a batch contains a
+single long sequence, all sequences in that batch must be padded to its length.
+On the training set split by goal, the average padded length with randomly
+shuffled batches of size 64 was 135.6. Sorting examples by length within a
+window before forming batches reduced the average padded length to 40.1.
+Do not use this sampler for validation or test sets.
 """
 
 from __future__ import annotations
@@ -15,7 +18,7 @@ from torch.utils.data import Sampler
 
 
 def piqa_lengths(df):
-    """每道题补齐后要占的长度：goal + 较长的那个 solution + [CLS]/[SEP]/[EOS]。"""
+    """Calculate the padded length of each example: goal + longer solution + [CLS]/[SEP]/[EOS]."""
     goal = df["goal_tokens"].map(len).to_numpy()
     sol1 = df["sol1_tokens"].map(len).to_numpy()
     sol2 = df["sol2_tokens"].map(len).to_numpy()
@@ -23,7 +26,7 @@ def piqa_lengths(df):
 
 
 class LengthBucketBatchSampler(Sampler):
-    """每个 epoch：打乱下标，窗口内按长度排序，切成 batch，再打乱 batch 顺序。"""
+    """For each epoch, shuffle indices, sort by length within each window, form batches, then shuffle batch order."""
 
     def __init__(self, lengths, batch_size, generator=None, bucket_multiplier=50):
         if batch_size < 1:

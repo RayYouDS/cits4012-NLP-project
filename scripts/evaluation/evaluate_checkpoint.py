@@ -1,6 +1,6 @@
-"""加载一个训练好的 checkpoint，在验证集或测试集上评估一次。
+"""Load a trained checkpoint and evaluate it once on the validation or test set.
 
-从仓库根目录运行：
+Run from the repository root:
 
     python -m scripts.evaluation.evaluate_checkpoint \
         --config config/m3_params.json \
@@ -9,10 +9,16 @@
         --split valid \
         --output-dir reports/eval/run_name
 
-模型用 scripts.training.run_m3.build_model 构建，和训练时同一套 config 字段。
-include_goal 默认打开。A2-a 消融传 --no-include-goal，输入变成 [CLS] [SEP] 方案 [EOS]。
-验证集和测试集都是 shuffle=False。测试集只在模型已经冻结之后调用。
+The model is constructed using scripts.training.run_m3.build_model and the
+same configuration fields used during training.
+
+The goal is included by default. For the A2-a ablation, pass
+--no-include-goal to use the input format [CLS] [SEP] solution [EOS].
+
+Both validation and test DataLoaders use shuffle=False. The test set should
+only be evaluated after the model has been finalised.
 """
+
 
 import argparse
 import json
@@ -32,7 +38,10 @@ DATA_DIR = Path("datasets/PIQA")
 
 
 class OptionalGoalCollator:
-    """include_goal 为假时不改 PIQACollator，只在这里去掉 goal。"""
+    """
+    Optionally exclude the goal from the input sequence without modifying
+    the existing PIQACollator implementation.
+    """
 
     def __init__(self, tokenizer, include_goal=True):
         self.include_goal = include_goal

@@ -4,8 +4,9 @@ from scripts.models.sinusoidal_positional_encoding import SinusoidalPositionalEn
 import math
 
 
-# 两分类 Transformer 不需要 Decoder，只需要一个线性分类头
-# 使用 Dropout 进行正则化
+# A binary classification Transformer does not require a decoder;
+# an encoder and a linear classification head are sufficient.
+# Dropout is used for regularisation.
 
 class TransformerClassifier(nn.Module):
     def __init__(
@@ -25,7 +26,7 @@ class TransformerClassifier(nn.Module):
         super().__init__()
 
         if embedding_dim % num_heads != 0:
-            # 数值检查：embedding_dim 必须能被 num_heads 整除
+            # Ensure that the embedding dimension is divisible by the number of heads
             raise ValueError("embedding_dim must be divisible by num_heads")
 
         if pooling not in ("cls", "mean"):
@@ -36,7 +37,7 @@ class TransformerClassifier(nn.Module):
         self.embedding_dim = embedding_dim
         self.enable_pos_emb = enable_pos_emb
 
-        # 1. Embedding 层
+        # 1. Embedding layer
         self.embedding = nn.Embedding(
             vocab_size,
             embedding_dim,
@@ -49,42 +50,47 @@ class TransformerClassifier(nn.Module):
                 max_length=max_seq_length
             )
 
-        # 1.5. 位置编码后的 Dropout（遵循 Transformer 标准设计）
+        # 1.5. Dropout after positional encoding, following the standard
+        # Transformer design
         self.emb_dropout = nn.Dropout(p=dropout_rate)
 
-        # 2. 多头注意力 encoder
-        # 对比实验：不同的 head 数对于精度的影响
+        # 2. Multi-head attention encoder layer
+        # Ablation study: investigate how the number of attention heads
+        # affects classification accuracy
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=embedding_dim,
             nhead=num_heads,
             dim_feedforward=128,
             batch_first=True,
-            dropout=dropout_rate  # 显式指定 Encoder 层内 Dropout
+            dropout=dropout_rate  # Explicitly set dropout within the encoder layer
         )
 
-        # 3. 多层 encoder，下一层是上一层的进一步抽象
-        # 对比试验点：减少层数是否影响精度
+        # 3. Stack multiple encoder layers, allowing successive layers
+        # to learn increasingly contextualised representations
+        # Ablation study: investigate the effect of reducing the number of layers
         self.encoder = nn.TransformerEncoder(
             encoder_layer,
             num_layers=num_layers
         )
 
-        # 3.5. 分类头前的 Dropout (可设为与 dropout_rate 一致，或设为稍高的 0.2/0.3)
+        # 3.5. Dropout before the classification head
+        # This can be set to dropout_rate or a higher value, such as 0.2 or 0.3
         self.fc_dropout = nn.Dropout(p=dropout_rate)
 
-        # 4. 线性分类头，映射成 logits
+        # 4. Linear classification head that produces a scalar logit per candidate
         self.classifier = nn.Linear(embedding_dim, 1)
 
 
     def encode(self, input_ids, mask):
-        # 1. 获取 Embedding
+        # 1. Convert token IDs into embeddings
         x = self.embedding(input_ids)
 
         if self.enable_pos_emb:
-            # 2. 叠加正弦位置编码
+            # 2. Add sinusoidal positional encodings
             x = self.position_embedding(x)
 
-        x = self.emb_dropout(x) # 即使没有位置编码，也进行原始 embedding 的 dropout
+        # Apply dropout to the embeddings, even when positional encoding is disabled
+        x = self.emb_dropout(x)
         
         padding_mask = ~mask
 
@@ -95,19 +101,21 @@ class TransformerClassifier(nn.Module):
 
         # Pooling: [B, L, D] -> [B, D]
         if self.pooling == "cls":
-            # 提取 [CLS] (index=0) 位置的聚合特征向量 -> [B, D]
-            # 原理：Transformer 通过 Self-Attention 让 Index 0 的 [CLS] 看到全局上下文，从而汇聚全句语义。
+            # Extract the representation at the [CLS] position (index 0).
+            # Self-attention allows this position to incorporate contextual
+            # information from the other tokens in the sequence.
             pooled = x[:, 0, :]
 
 
         elif self.pooling == "mean":
-            # 只对有效 token 求平均，不包含 padding
+            # Compute the mean over valid token positions only, excluding padding
             valid_mask = mask.unsqueeze(-1).to(dtype=x.dtype)  # [B, L, 1]
 
             pooled = (x * valid_mask).sum(dim=1)               # [B, D]
             pooled = pooled / valid_mask.sum(dim=1).clamp(min=1)
 
-        pooled = self.fc_dropout(pooled)    # 在输入分类器之前应用 fc_dropout
+        # Apply dropout before passing the representation to the classifier
+        pooled = self.fc_dropout(pooled)
         
         return pooled
 
@@ -119,10 +127,11 @@ class TransformerClassifier(nn.Module):
         mask_1,
         mask_2
     ):
-
+        # Encode candidate 1 & 2
         repr_1 = self.encode(input_1, mask_1)
         repr_2 = self.encode(input_2, mask_2)
 
+        # Compute a scalar logit for each candidate
         logit_1 = self.classifier(repr_1)   # [B, 1]
         logit_2 = self.classifier(repr_2)   # [B, 1]
 
@@ -136,11 +145,14 @@ class TransformerClassifier(nn.Module):
 
     @torch.no_grad()
     def predict(self, input_1, input_2, mask_1, mask_2):
-        '''
-        不带反向传播的预测函数，不涉及梯度下降
-        这里不会打开 model.eval()，防止在训练过程中忘记关闭
-        进行性能测试时应手动调整模型的 train 和 eval 模式
-        '''
+        """
+        Generate predictions without computing gradients.
+
+        This method does not switch the model to evaluation mode automatically.
+        This avoids unintentionally changing the model's training state.
+        Set the model to eval() explicitly when performing evaluation
+        or benchmarking.
+        """
         outputs = self.forward(input_1, input_2, mask_1, mask_2)
 
         return outputs

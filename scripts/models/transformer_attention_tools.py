@@ -6,18 +6,24 @@ import math
 
 @torch.no_grad()
 def extract_encoder_attentions(model, ids, mask):
-    '''
-    用于取出 Attention Weight Matrix（注意力权重矩阵） 的工具函数
+    """
+    Extract attention weight matrices from a Transformer encoder.
 
     Args:
-        model: TransformerClassifier
-        ids:  [B, L]
-        mask: [B, L], True = valid token, False = padding
+        model: A TransformerClassifier instance.
+        ids: Token IDs with shape [B, L].
+        mask: Boolean mask with shape [B, L], where True indicates
+              a valid token and False indicates padding.
 
     Returns:
-        attentions: list of tensors, each [B, H, L, L]
-    '''
-    # model.eval()  # 默认不进行状态管理，需要在函数外手动调整模型状态
+        A list of attention weight tensors, one per encoder layer.
+        Each tensor has shape [B, H, L, L], where:
+            B: batch size
+            H: number of attention heads
+            L: sequence length
+    """
+    # model.eval() is intentionally not called here.
+    # The caller is responsible for managing the model's training state.
 
     # Embedding (no scaling)
     x = model.embedding(ids)
@@ -79,14 +85,14 @@ def plot_attention_heads(
     num_heads = sample_attention.shape[0]
     nrows = math.ceil(num_heads / ncols)
 
-    # 自动获取当前样本的正确答案
+    # Identify the correct candidate, if the ground-truth label is provided
     correct_candidate = None
 
     if labels is not None:
         label = labels[sample_idx].item()
         correct_candidate = f"input_{label + 1}"
 
-    # 自动将 Token ID 转换为 SentencePiece Token
+    # Convert token IDs into SentencePiece token strings
     tokens = None
     if input_ids is not None and tokenizer is not None:
         ids = input_ids[sample_idx].detach().cpu().tolist()
