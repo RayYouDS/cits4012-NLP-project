@@ -1,29 +1,38 @@
 # PIQA Commonsense Reasoning
 
-A PyTorch project investigating physical commonsense reasoning on the PIQA dataset. This repository contains data preprocessing, model training, baseline evaluation, ablation experiments, and attention analysis.
+For details and a runnable demonstration, see:
 
-For detailed methodology, results, figures, and discussion, see [`Report`](./reports/CITS4012_67.pdf).
+- Report: [`Report`](./reports/CITS4012_67.pdf).
 
-For runnable demonstration, see ['Notebook'](CITS4012_67.ipynb).
+- Runnable demonstration: [`Notebook`](CITS4012_67.ipynb).
+
+Physical commonsense reasoning requires models to reason about everyday physical interactions beyond surface-level linguistic patterns. The PIQA benchmark evaluates this ability by asking models to select the more physically plausible of two solutions for a given goal.
+
+This project compares BiGRU, BiLSTM, and Transformer encoders trained from scratch, alongside rule-based and pretrained-model baselines. The Transformer achieves 58.9% test accuracy, outperforming the length heuristic but remaining around 11 percentage points below leading pretrained models.
+
+Attention analysis suggests that the model can identify differences between candidate solutions but often lacks the physical knowledge needed to judge their plausibility. These findings highlight the limitations of learning physical commonsense from language alone.
+
+
 
 ## Methodology
 
 ### Data Pipeline
 
-- Dataset: PIQA, with goal-level training/validation splitting.
+- Dataset: PIQA, with 14,507 training, 1,606 validation, and 1,838 test examples.
+
 - Preprocessing: Unicode NFKC normalisation and whitespace standardisation.
+
 - Tokenisation: SentencePiece BPE with an 8,000-token vocabulary.
+
 - Input format: `[CLS] goal [SEP] solution [EOS]`.
-- Efficiency: length-bucketed batching, Boolean padding masks, and optional GPU data preloading.
-- Split sizes: 14,507 training, 1,606 validation, and 1,838 test examples.
+
+- Efficiency: Goal-level training/validation splitting, length-bucketed batching, Boolean padding masks, and optional GPU data preloading.
 
 ### Main Model
 
-A Transformer encoder trained from scratch to score two candidate solutions using shared parameters and cross-entropy loss.
+A Transformer encoder trained from scratch to score two candidate solutions using shared parameters and cross-entropy loss. The final configuration uses AdamW with a learning rate of (9\times10^{-4}), an embedding dimension of 100, two encoder layers, four attention heads, dropout of 0.3, and a batch size of 512.
 
-The final configuration uses AdamW, a learning rate of $9\times10^{-4}$, dropout of 0.3, two encoder layers, four attention heads, an embedding dimension of 100, and a batch size of 512. Models are trained for 300 epochs, retaining the checkpoint with the highest validation accuracy.
-
-Three random seeds are used: `4012`, `4013`, and `4014`.
+Models are trained for 300 epochs, retaining the checkpoint with the highest validation accuracy. Experiments use three random seeds: 4012, 4013, and 4014.
 
 ### Baselines
 
@@ -49,15 +58,19 @@ The three trained ablations use seeds `4012`–`4014` and 300 epochs. A2-a uses 
 
 ## Experimental Workflow
 
-1. **Preprocess data:** normalise text, tokenise examples, and construct goal-level training/validation splits.
-2. **Establish baselines:** evaluate the heuristic and pretrained-model baselines.
-3. **Tune the main model:** conduct staged validation-based searches over optimiser and learning rate, dropout, and encoder depth.
-4. **Train the final model:** run the selected configuration with three random seeds and retain the best validation checkpoint.
-5. **Run ablations:** change one specified component at a time without retuning.
-6. **Evaluate models:** report accuracy and compare paired predictions using continuity-corrected McNemar tests.
-7. **Analyse attention:** inspect attention distributions, prediction errors, and the effect of removing goal context.
+1. Preprocess and tokenise the PIQA dataset.
 
-Validation data are used for model selection; the test set is reserved for final evaluation.
+2. Evaluate heuristic, recurrent, and pretrained-model baselines.
+
+3. Select the main architecture and tune hyperparameters using validation data.
+
+4. Train the final model with three random seeds and retain the best validation checkpoint for each run.
+
+5. Conduct ablation experiments without retuning.
+
+6. Evaluate accuracy, compare paired predictions using continuity-corrected McNemar tests, and inspect attention patterns and prediction errors.
+
+The test set is reserved for final evaluation.
 
 ## Environment and Reproducibility
 
@@ -69,6 +82,6 @@ For manual reproduction, ensure that the required dependencies, PIQA dataset, an
 
 ## Further Reading
 
-See the project report for the full experimental setup, hyperparameter selection, quantitative comparisons, ablation results, attention visualisations, and limitations.
+See the [`Report`](./reports/CITS4012_67.pdf) for the full experimental setup, hyperparameter selection, quantitative comparisons, ablation results, attention visualisations, and limitations.
 
 
