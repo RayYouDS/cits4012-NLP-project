@@ -76,7 +76,7 @@ The test set is reserved for final evaluation.
 
 Experiments were conducted in Google Colab with GPU acceleration, using NVIDIA Tesla T4 or A100 GPUs depending on availability.
 
-To reproduce the experiments, open ['Notebook'](CITS4012_67.ipynb) in Google Colab, select a GPU runtime, and run the notebook cells in order.
+To reproduce the experiments, open [`Notebook`](CITS4012_67.ipynb) in Google Colab, select a GPU runtime, and run the notebook cells in order.
 
 For manual reproduction, ensure that the required dependencies, PIQA dataset, and SentencePiece model are available. Use the specified random seeds and configurations, and verify that saved checkpoints and results correspond to the current code revision.
 
