@@ -296,12 +296,12 @@ def run(cfg):
             "mcnemar": compared,
             "significant": significant,
         })
-        verdict = "significant" if significant else "not significant"
+        verdict = "显著" if significant else "不显著"
         print(
             f"\nMcNemar {first['model']} vs {second['model']} "
             f"(seed {seed0}): only_a={compared['only_a']} only_b={compared['only_b']} "
             f"chi2={compared['chi2']:.4f} p={compared['p_value']:.4f} "
-            f"difference is {verdict} (alpha={ALPHA})"
+            f"差别{verdict} (alpha={ALPHA})"
         )
     else:
         print("\nfewer than 2 models, skip McNemar")
